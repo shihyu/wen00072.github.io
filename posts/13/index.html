@@ -1,0 +1,3306 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>My code works, I don&#8217;t know why.</title>
+  <meta name="author" content="Wen Liao">
+
+  
+  <meta name="description" content="大綱 檔案的hole檔案中連續的null 字元。 當lseek指定的offset (假設叫o_lseek)超過目前檔案最後的offset(o_end)時，多出來的delta系統並不會寫入到實體空件，而是有人要讀取這段空間時會讀到連續的null字元。也就是說會有檔案大小遠大於實際佔用的儲存空間的特性 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://wen00072.github.io/posts/13/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="My code works, I don't know why." type="application/atom+xml">
+  <link href="/stylesheets/data-table.css" media="screen, projection" rel="stylesheet" type="text/css" />
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="/javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">My code works, I don&#8217;t know why.</a></h1>
+  
+    <h2>國王的耳朵是驢耳朵</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="sitesearch" value="wen00072.github.io">
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/categories">Categories</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div class="blog-index">
+  
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/12/31/linux-archives-hole/">Linux 檔案的hole</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-12-31T06:45:00+08:00'><span class='date'><span class='date-month'>Dec</span> <span class='date-day'>31</span><span class='date-suffix'>st</span>, <span class='date-year'>2013</span></span> <span class='time'>6:45 am</span></time>
+        
+           | <a href="/blog/2013/12/31/linux-archives-hole/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/12/31/linux-archives-hole/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h2>大綱</h2>
+
+<p>檔案的hole檔案中連續的null 字元。</p>
+
+<p>當lseek指定的offset (假設叫o_lseek)超過目前檔案最後的offset(o_end)時，多出來的delta系統並不會寫入到實體空件，而是有人要讀取這段空間時會讀到連續的null字元。也就是說會有檔案大小遠大於實際佔用的儲存空間的特性。</p>
+
+<p>一般來說，hole會應在sparse的檔案，最典型的的例子就是Virtual machine的image檔案。</p>
+
+<ul>
+<li><a href="#%E7%AF%84%E4%BE%8B">範例</a>
+
+<ul>
+<li><a href="#%E5%9F%B7%E8%A1%8C%E7%B5%90%E6%9E%9C">執行結果</a></li>
+<li><a href="#Makefile">Makefile</a></li>
+<li><a href="#%E7%A8%8B%E5%BC%8F">程式</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99">參考資料</a></li>
+</ul>
+
+
+<p><a name="範例"></a></p>
+
+<h2>範例</h2>
+
+<p>測試程式行為描述</p>
+
+<ol>
+<li>讀入任意字串</li>
+<li>將字串寫入檔案，每個字元間隔1G的空間</li>
+</ol>
+
+
+<p><a name="執行結果"></a></p>
+
+<h2>執行結果</h2>
+
+<p>請注意檔案大小和目錄大小的差異</p>
+
+<figure class='code'><figcaption><span>result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ ./create_hole_file
+</span><span class='line'>Enter any text: test111
+</span><span class='line'>Get test111
+</span><span class='line'>, used to create test hole file
+</span><span class='line'>
+</span><span class='line'>$ ls -lh file_in_the_hole
+</span><span class='line'>-rw------- 1 nobody nobody 7.1G Dec 31 14:24 file_in_the_hole
+</span><span class='line'>
+</span><span class='line'>$ du -sh .
+</span><span class='line'>128K  .
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="Makefile"></a></p>
+
+<h2>Makefile</h2>
+
+<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">CFLAGS</span><span class="o">=</span>-g -Wall -pedantic
+</span><span class='line'><span class="nv">LDFLAGS</span><span class="o">=</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">TARGET</span><span class="o">=</span>create_hole_file
+</span><span class='line'><span class="nv">HOLE_FILE_NAME</span><span class="o">=</span>file_in_the_hole
+</span><span class='line'>
+</span><span class='line'><span class="nf">all</span><span class="o">:</span> <span class="k">$(</span><span class="nv">TARGET</span><span class="k">)</span>
+</span><span class='line'><span class="nf">create_hole_file</span><span class="o">:</span> <span class="n">create_hole_file</span>.<span class="n">c</span>
+</span><span class='line'>  gcc -o <span class="nv">$@</span> <span class="k">$(</span>CFLAGS<span class="k">)</span> <span class="nv">$^</span> -DHOLE_FILE_NAME<span class="o">=</span><span class="s2">&quot;\&quot;$(HOLE_FILE_NAME)\&quot;&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
+</span><span class='line'>  rm -rf *.o *~ <span class="k">$(</span>TARGET<span class="k">)</span> <span class="k">$(</span>HOLE_FILE_NAME<span class="k">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="程式"></a></p>
+
+<h2>程式</h2>
+
+<figure class='code'><figcaption><span>create_hole_file.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;sys/types.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;sys/stat.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;fcntl.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;errno.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;string.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;unistd.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#ifndef HOLE_FILE_NAME</span>
+</span><span class='line'><span class="cp">#error You need to define HOLE_FILE_NAME</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#define MAX_CHAR_LINE  (256)</span>
+</span><span class='line'><span class="cp">#define HOLE_GAP       (1024*1024*1024) </span><span class="cm">/* 1G */</span><span class="cp"></span>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="kt">char</span> <span class="n">line</span><span class="p">[</span><span class="n">MAX_CHAR_LINE</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">rval</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">fd</span>   <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">i</span>    <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="kt">off_t</span>   <span class="n">lseek_offset</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">ssize_t</span> <span class="n">write_size</span>   <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="cm">/* Open file */</span>
+</span><span class='line'>    <span class="n">fd</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="n">HOLE_FILE_NAME</span><span class="p">,</span> <span class="n">O_CREAT</span> <span class="o">|</span> <span class="n">O_WRONLY</span><span class="p">,</span> <span class="n">S_IRUSR</span>  <span class="o">|</span> <span class="n">S_IWUSR</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">fd</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;%d: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__LINE__</span><span class="p">,</span> <span class="n">strerror</span><span class="p">(</span><span class="n">errno</span><span class="p">));</span>
+</span><span class='line'>        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="cm">/* Get string from stdin */</span>
+</span><span class='line'>    <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;Enter any text: &quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">fgets</span><span class="p">(</span><span class="n">line</span><span class="p">,</span> <span class="n">MAX_CHAR_LINE</span><span class="p">,</span> <span class="n">stdin</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;Get %s, used to create test hole file</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="cm">/* Implent hole */</span>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">strlen</span><span class="p">(</span><span class="n">line</span><span class="p">);</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">write_size</span> <span class="o">=</span> <span class="n">write</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">line</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="p">));</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">write_size</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;%d: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__LINE__</span><span class="p">,</span> <span class="n">strerror</span><span class="p">(</span><span class="n">errno</span><span class="p">));</span>
+</span><span class='line'>            <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="cm">/* file in the hole! */</span>
+</span><span class='line'>        <span class="n">lseek_offset</span> <span class="o">=</span> <span class="n">lseek</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">HOLE_GAP</span><span class="p">,</span> <span class="n">SEEK_CUR</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">lseek_offset</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;%d: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__LINE__</span><span class="p">,</span> <span class="n">strerror</span><span class="p">(</span><span class="n">errno</span><span class="p">));</span>
+</span><span class='line'>            <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="cm">/* Close */</span>
+</span><span class='line'>    <span class="n">rval</span> <span class="o">=</span> <span class="n">close</span><span class="p">(</span><span class="n">fd</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">rval</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;%d: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__LINE__</span><span class="p">,</span> <span class="n">strerror</span><span class="p">(</span><span class="n">errno</span><span class="p">));</span>
+</span><span class='line'>        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="參考資料"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>man lseek</li>
+<li>The Linux Programming Interface: Chapter 4</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/12/29/using-getopt-parse-command-line-parameter/">Linux下面的C語言使用getopt Parse Command Line參數</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-12-29T16:24:00+08:00'><span class='date'><span class='date-month'>Dec</span> <span class='date-day'>29</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>4:24 pm</span></time>
+        
+           | <a href="/blog/2013/12/29/using-getopt-parse-command-line-parameter/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/12/29/using-getopt-parse-command-line-parameter/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>在Linux下面的C語言可以透過getopt去parse從command line傳過來的參數</p>
+
+<p><strong>使用方式基本上就是重複讀取getopt回傳option字元直到回傳-1。</strong></p>
+
+<p><strong>請注意：這只是蓋略說明，很多細節仍然需要參考manpage，例如哪些是Gnu的特別功能還有一些細節的參數操作等。</strong></p>
+
+<p>進一步細節如下：</p>
+
+<h2>大綱</h2>
+
+<ul>
+<li><a href="#%E5%8F%83%E6%95%B8%E4%BB%A5%E5%8F%8A%E8%AE%8A%E6%95%B8%E8%AA%AA%E6%98%8E">參數以及變數說明</a></li>
+<li><a href="#%E7%AF%84%E4%BE%8B%E7%A8%8B%E5%BC%8F">範例程式</a></li>
+<li><a href="#%E5%9F%B7%E8%A1%8C%E7%B5%90%E6%9E%9C">執行結果</a></li>
+<li><a href="#%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99">參考資料</a></li>
+</ul>
+
+
+<p><a name="參數以及變數說明"></a></p>
+
+<h2>參數以及變數說明</h2>
+
+<ul>
+<li>參數
+
+<ul>
+<li><code>int argc</code>: main的argument count</li>
+<li><code>char **argv</code>: main的argument vector</li>
+<li><code>const char optstring</code>: 你的程式要支援的option及格式
+
+<ul>
+<li>option以<code>-</code>開頭，後面為單一個字元，可接參數</li>
+<li>格式
+
+<ul>
+<li>單一字元</li>
+<li>單一字元後接<code>:</code>
+
+<ul>
+<li>該option 支援參數</li>
+</ul>
+</li>
+<li>單一字元後接<code>::</code>
+
+<ul>
+<li>該option 可接參數也可不接</li>
+<li>ex: option <code>-a</code>, 參數<code>arg1</code>，下命令會是<code>./cmd -aarg1</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>範例: 支援<code>-a</code>, <code>-b</code>, <code>-c 參數</code>, <code>-d 參數</code>，<code>-e optional 參數</code>
+
+<ul>
+<li><code>"abc:d:e::"</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>變數 <strong>(僅列舉)</strong>
+
+<ul>
+<li><code>optopt</code>
+
+<ul>
+<li>如果遇到不支援的option或是不合語法的option操作，getopt會回傳<code>?</code>，然後把出問題的option放在<code>optopt</code>這個變數內</li>
+</ul>
+</li>
+<li><code>optind</code>
+
+<ul>
+<li>option index，表示getopt下一個要處理的參數。當getopt回傳<code>-1</code>後記得比較<code>optind</code>和<code>argc</code>看看還有沒有非option的參數要處理
+
+<ul>
+<li>範例 <code>./cmd -a -b 123 456</code>，跑完getopt後還有123 456要處理。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="範例程式"></a></p>
+
+<h2>範例程式</h2>
+
+<figure class='code'><figcaption><span>test_getopt.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;unistd.h&gt;  </span><span class="cm">/* getopt */</span><span class="cp"></span>
+</span><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">cmd_opt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;argc:%d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">argc</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">while</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;proces index:%d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">optind</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">cmd_opt</span> <span class="o">=</span> <span class="n">getopt</span><span class="p">(</span><span class="n">argc</span><span class="p">,</span> <span class="n">argv</span><span class="p">,</span> <span class="s">&quot;abc:d:e::&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="cm">/* End condition always first */</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">cmd_opt</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="cm">/* Print option when it is valid */</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="n">cmd_opt</span> <span class="o">!=</span> <span class="sc">&#39;?&#39;</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;option:-%c</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">cmd_opt</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="cm">/* Lets parse */</span>
+</span><span class='line'>        <span class="k">switch</span> <span class="p">(</span><span class="n">cmd_opt</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="cm">/* No args */</span>
+</span><span class='line'>            <span class="k">case</span> <span class="sc">&#39;a&#39;</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">case</span> <span class="sc">&#39;b&#39;</span><span class="o">:</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="cm">/* Single arg */</span>
+</span><span class='line'>            <span class="k">case</span> <span class="sc">&#39;c&#39;</span><span class="o">:</span>
+</span><span class='line'>            <span class="k">case</span> <span class="sc">&#39;d&#39;</span><span class="o">:</span>
+</span><span class='line'>                <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;option arg:%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">optarg</span><span class="p">);</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>            <span class="cm">/* Optional args */</span>
+</span><span class='line'>            <span class="k">case</span> <span class="sc">&#39;e&#39;</span><span class="o">:</span>
+</span><span class='line'>                <span class="k">if</span> <span class="p">(</span><span class="n">optarg</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>                    <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;option arg:%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">optarg</span><span class="p">);</span>
+</span><span class='line'>                <span class="p">}</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'>            <span class="cm">/* Error handle: Mainly missing arg or illegal option */</span>
+</span><span class='line'>            <span class="k">case</span> <span class="sc">&#39;?&#39;</span><span class="o">:</span>
+</span><span class='line'>                <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;Illegal option:-%c</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">isprint</span><span class="p">(</span><span class="n">optopt</span><span class="p">)</span><span class="o">?</span><span class="nl">optopt</span><span class="p">:</span><span class="sc">&#39;#&#39;</span><span class="p">);</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>            <span class="k">default</span><span class="o">:</span>
+</span><span class='line'>                <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;Not supported option</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+</span><span class='line'>                <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="cm">/* Do we have args? */</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">argc</span> <span class="o">&gt;</span> <span class="n">optind</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>        <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="n">optind</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">argc</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;argv[%d] = %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">argv</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="執行結果"></a></p>
+
+<h2>執行結果</h2>
+
+<figure class='code'><figcaption><span>result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ ./test_getopt -a -emy_args -c dddd  123 456 7890 -b -f -d
+</span><span class='line'>argc:11
+</span><span class='line'>proces index:1
+</span><span class='line'>option:-a
+</span><span class='line'>proces index:2
+</span><span class='line'>option:-e
+</span><span class='line'>option arg:my_args
+</span><span class='line'>proces index:3
+</span><span class='line'>option:-c
+</span><span class='line'>option arg:dddd
+</span><span class='line'>proces index:5
+</span><span class='line'>option:-b
+</span><span class='line'>proces index:9
+</span><span class='line'>./test_getopt: invalid option -- &#39;f&#39;
+</span><span class='line'>Illegal option:-f
+</span><span class='line'>proces index:10
+</span><span class='line'>./test_getopt: option requires an argument -- &#39;d&#39;
+</span><span class='line'>Illegal option:-d
+</span><span class='line'>proces index:11
+</span><span class='line'>argv[8] = 123
+</span><span class='line'>argv[9] = 456
+</span><span class='line'>argv[10] = 7890
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="參考資料"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>man 3 getopt</li>
+<li>The Linux Programming Interface: Appendix B</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/12/24/c-archive-reference-link/">C語言archive 明明有symbol卻link時出現unsolved Symbol錯誤</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-12-24T02:29:00+08:00'><span class='date'><span class='date-month'>Dec</span> <span class='date-day'>24</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>2:29 am</span></time>
+        
+           | <a href="/blog/2013/12/24/c-archive-reference-link/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/12/24/c-archive-reference-link/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h2>說明</h2>
+
+<p><a href="#%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99">GNU ld 手冊</a>提到，archive (可能是<em>.a或是</em>.o檔)在link時預設只會reference一次，如果沒有注意的話會發現明明有symbol卻link時出現unsolved symbol錯誤</p>
+
+<hr />
+
+<h2>測試</h2>
+
+<p>下面是<code>測試程式碼</code>、<code>liba.a包含的程式碼</code>和<code>liba.a包含的程式碼</code>，可以看到liba.a的function去呼叫libb的function，反之亦然。</p>
+
+<figure class='code'><figcaption><span>test.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &quot;libb.h&quot;</span>
+</span><span class='line'><span class="cp">#include &quot;liba.h&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">test_liba</span><span class="p">();</span>
+</span><span class='line'>    <span class="n">test_libb</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>liba.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &quot;libb.h&quot;</span>
+</span><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">void</span> <span class="nf">test_liba</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">from_libb</span><span class="p">();</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">void</span> <span class="nf">from_liba</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>libb.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &quot;liba.h&quot;</span>
+</span><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">void</span> <span class="nf">test_libb</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">from_liba</span><span class="p">();</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">void</span> <span class="nf">from_libb</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>而測試的Makefile如下，變數說明如下</p>
+
+<ul>
+<li>$^: prerequisites</li>
+<li>$@: target</li>
+<li>$>: 第一個prerequisite</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nf">all</span><span class="o">:</span> <span class="n">liba</span>.<span class="n">a</span> <span class="n">libb</span>.<span class="n">a</span> <span class="n">test</span>.<span class="n">o</span>
+</span><span class='line'>  gcc -o <span class="nb">test</span> <span class="nv">$^</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">liba.a</span><span class="o">:</span> <span class="n">liba</span>.<span class="n">o</span> <span class="n">liba</span>.<span class="n">h</span>
+</span><span class='line'>  ar crv <span class="nv">$@</span> <span class="nv">$&lt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">libb.a</span><span class="o">:</span> <span class="n">libb</span>.<span class="n">o</span> <span class="n">libb</span>.<span class="n">h</span>
+</span><span class='line'>  ar crv <span class="nv">$@</span> <span class="nv">$&lt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
+</span><span class='line'>  rm -rf *.o *.a *~
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>編譯輸出如下，正如前面的預想</p>
+
+<figure class='code'><figcaption><span>Result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make
+</span><span class='line'>cc    -c -o liba.o liba.c
+</span><span class='line'>ar crv liba.a liba.o
+</span><span class='line'>a - liba.o
+</span><span class='line'>cc    -c -o libb.o libb.c
+</span><span class='line'>ar crv libb.a libb.o
+</span><span class='line'>a - libb.o
+</span><span class='line'>cc    -c -o test.o test.c
+</span><span class='line'>gcc -o test liba.a libb.a test.o
+</span><span class='line'>test.o: In function `main&#39;:
+</span><span class='line'>test.c:(.text+0x5): undefined reference to `test_liba&#39;
+</span><span class='line'>test.c:(.text+0xa): undefined reference to `test_libb&#39;
+</span><span class='line'>collect2: ld returned 1 exit status
+</span><span class='line'>make: *** [all] Error 1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<hr />
+
+<h2>解法</h2>
+
+<h3>解法一：調整link順序</h3>
+
+<ul>
+<li>將Makefile的<code>all: liba.a libb.a test.o</code>順序改成<code>all: test.o liba.a libb.a</code>可以正常編譯
+
+<ul>
+<li>延伸測試
+
+<ul>
+<li>將Makefile的<code>all: liba.a libb.a test.o</code>順序改成<code>all: liba.a test.o libb.a</code>會發生下面的錯誤</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>關於link怎麼resovle symbol部份就不在本篇中討論，抱歉。</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>Result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make
+</span><span class='line'>cc    -c -o liba.o liba.c
+</span><span class='line'>ar crv liba.a liba.o
+</span><span class='line'>a - liba.o
+</span><span class='line'>cc    -c -o test.o test.c
+</span><span class='line'>cc    -c -o libb.o libb.c
+</span><span class='line'>ar crv libb.a libb.o
+</span><span class='line'>a - libb.o
+</span><span class='line'>gcc -o test liba.a test.o libb.a
+</span><span class='line'>test.o: In function `main&#39;:
+</span><span class='line'>test.c:(.text+0x5): undefined reference to `test_liba&#39;
+</span><span class='line'>libb.a(libb.o): In function `test_libb&#39;:
+</span><span class='line'>libb.c:(.text+0x5): undefined reference to `from_liba&#39;
+</span><span class='line'>collect2: ld returned 1 exit status
+</span><span class='line'>make: *** [all] Error 1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>解法二：使用<code>--start-group</code> &hellip; <code>--end-group</code>參數</h3>
+
+<ul>
+<li>將Makefile 的<code>gcc -o test $^</code>改成<code>gcc -o test -Wl,--start-group $^ -Wl,--end-group</code></li>
+<li><p>參數說明如下</p>
+
+<ul>
+<li><code>-Wl</code>: 告訴gcc傳參數給linker</li>
+<li><code>--start-group</code> &hellip; <code>--end-group</code>
+
+<ul>
+<li>告訴linker在中間的<code>...</code>重複找尋symbol</li>
+<li><strong>這樣的行為有效能代價，請謹慎使用</strong></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>編譯並執行結果如下</p></li>
+</ul>
+
+
+<figure class='code'><figcaption><span>Result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make
+</span><span class='line'>cc    -c -o liba.o liba.c
+</span><span class='line'>ar crv liba.a liba.o
+</span><span class='line'>a - liba.o
+</span><span class='line'>cc    -c -o libb.o libb.c
+</span><span class='line'>ar crv libb.a libb.o
+</span><span class='line'>a - libb.o
+</span><span class='line'>cc    -c -o test.o test.c
+</span><span class='line'>gcc -o test -Wl,--start-group liba.a libb.a test.o -Wl,--end-group
+</span><span class='line'>
+</span><span class='line'>$ ./test
+</span><span class='line'>from_libb
+</span><span class='line'>from_liba
+</span></code></pre></td></tr></table></div></figure>
+
+
+<hr />
+
+<h2>版本資訊</h2>
+
+<ul>
+<li>GNU ld 2.2</li>
+</ul>
+
+
+<hr />
+
+<p><a name="參考資料"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>man ld
+
+<ul>
+<li>搜尋start-group</li>
+</ul>
+</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/11/29/c-language-assembler-under-linux-sharing/">C語言在Linux下組裝經驗分享</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-11-29T14:19:00+08:00'><span class='date'><span class='date-month'>Nov</span> <span class='date-day'>29</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>2:19 pm</span></time>
+        
+           | <a href="/blog/2013/11/29/c-language-assembler-under-linux-sharing/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/11/29/c-language-assembler-under-linux-sharing/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>整理組裝經驗如下，全部是Command line的文字模式</p>
+
+<ul>
+<li><a href="#%E9%9D%9ERuntime">非Runtime</a>
+
+<ul>
+<li><a href="#nr1">找出static library symbols</a></li>
+<li><a href="#nr2">找出library搜尋路徑</a></li>
+<li><a href="#nr3">列出CC 預設define和相關資訊</a></li>
+</ul>
+</li>
+<li><a href="#Runtime">Runtime</a>
+
+<ul>
+<li><a href="#r1">dump console 輸出文字</a></li>
+<li><a href="#r2">當dynamic library 不在/無法放到linker搜尋路徑造成檔案無法執行</a></li>
+<li><a href="#r3">看程式system call的行為</a></li>
+<li><a href="#r4">Linker/loader 相關</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99">參考資料</a></li>
+</ul>
+
+
+<hr />
+
+<p><a name="非Runtime"></a></p>
+
+<h2>非Runtime</h2>
+
+<p><a name="nr1"></a></p>
+
+<ul>
+<li>找出static library symbols
+
+<ul>
+<li><code>find | grep *\\.a$ | xargs nm -A | grep 要找的symbol</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="nr2"></a></p>
+
+<ul>
+<li>找出library搜尋路徑
+
+<ul>
+<li><code>ld --verbose | grep SEARCH | tr "; " "\n\r"</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="nr3"></a></p>
+
+<ul>
+<li>列出CC 預設define和相關資訊
+
+<ul>
+<li><code>echo "" | gcc -E -xc - -dM -v</code></li>
+</ul>
+</li>
+<li>grep 加regular expression萬歲</li>
+</ul>
+
+
+<hr />
+
+<p><a name="Runtime"></a></p>
+
+<h2>Runtime</h2>
+
+<p><a name="r1"></a></p>
+
+<ul>
+<li><p>dump console 輸出文字</p>
+
+<ul>
+<li>script
+
+<ul>
+<li><code>script 文字輸出檔檔名</code></li>
+<li>操作</li>
+<li>按<code>ctrl+d</code>結束dump</li>
+</ul>
+</li>
+<li>執行檔 2>&amp;1 | tee 輸出檔名
+
+<ul>
+<li>變形
+
+<ul>
+<li>執行檔 2>&amp;1 | grep 想找的文字 | tee 輸出檔名
+<a name="r2"></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>當dynamic library 不在/無法放到linker搜尋路徑造成檔案無法執行</p>
+
+<ul>
+<li>$<code>LD_LIBRARY_PATH=$LD_LIBRARY_PATH:你的library路徑 執行檔</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="r3"></a></p>
+
+<ul>
+<li>看程式system call的行為
+
+<ul>
+<li><code>strace 執行檔</code></li>
+<li><code>strace -e open 執行檔</code>
+
+<ul>
+<li>看open system call，常用，因為有時候程式爛掉是因為開檔案失敗，用這個找很快</li>
+</ul>
+</li>
+<li><code>strace -f 執行檔</code>
+
+<ul>
+<li>包含fork的process</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="r4"></a></p>
+
+<ul>
+<li>Linker/Loader 相關
+
+<ul>
+<li>ld.so會和路徑以及平台相關，以Ubuntu LTS 12.04 X86有
+
+<ul>
+<li>/lib64/ld-linux-x86-64.so.2
+
+<ul>
+<li>64-bit</li>
+</ul>
+</li>
+<li>/lib/ld-linux.so.2
+
+<ul>
+<li>32-bit</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>透過dynamic linker/loader 看檔案link的library
+
+<ul>
+<li><code>LD_TRACE_LOADED_OBJECTS=1 ld.so 執行檔</code></li>
+</ul>
+</li>
+<li>觀察dynamic linker/loader行為
+
+<ul>
+<li><code>LD_DEBUG=help /bin/ls</code>
+
+<ul>
+<li>顯示選項</li>
+</ul>
+</li>
+<li><code>LD_DEBUG=all 執行檔</code>
+
+<ul>
+<li>全部都顯示</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>合體
+
+<ul>
+<li><code>LD_DEBUG=all strace -f ld.so strace -f 執行檔</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="參考資料"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><code>man ld.so</code></li>
+<li><a href="http://tldp.org/HOWTO/Program-Library-HOWTO/shared-libraries.html">TLDP: Shared Libraries</a></li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/10/29/ubuntu-wireless-networks-cant-ifconfig-wlan0-up-below-to-check/">Ubuntu 12.04下面無線網路無法ifconfig Wlan0 Up的檢查</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-10-29T00:48:00+08:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>29</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>12:48 am</span></time>
+        
+           | <a href="/blog/2013/10/29/ubuntu-wireless-networks-cant-ifconfig-wlan0-up-below-to-check/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/10/29/ubuntu-wireless-networks-cant-ifconfig-wlan0-up-below-to-check/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h2>錯誤訊息</h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ifconfig wlan0 up
+</span><span class='line'>SIOCSIFFLAGS: Operation not possible due to RF-kill</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>解決方式</h2>
+
+<ul>
+<li>列出RF的block狀態，如果是硬體關掉請自行打開RF開關
+
+<ul>
+<li><code>rfkill list all</code></li>
+</ul>
+</li>
+</ul>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ rfkill list all
+</span><span class='line'>8: phy1: Wireless LAN
+</span><span class='line'>  Soft blocked: yes
+</span><span class='line'>  Hard blocked: yes
+</span><span class='line'>9: hci0: Bluetooth
+</span><span class='line'>  Soft blocked: yes
+</span><span class='line'>  Hard blocked: no</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>從軟體上面打開WIFI
+
+<ul>
+<li><code>rfkill unblock wifi</code></li>
+</ul>
+</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/10/17/linux-quick-search-below-pdf/">Linux下面快速搜尋PDF的方式</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-10-17T07:04:00+08:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>17</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>7:04 am</span></time>
+        
+           | <a href="/blog/2013/10/17/linux-quick-search-below-pdf/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/10/17/linux-quick-search-below-pdf/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>有時候手上一堆PDF檔，不知道要查的資料在那個檔案，可以用下面的指令找出</p>
+
+<ul>
+<li><code>find -name "*.pdf" -exec pdfgrep {} \;</code></li>
+<li>注意pdfgrep需要額外安裝
+
+<ul>
+<li><code>sudo apt-get install pdfgrep</code></li>
+</ul>
+</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/10/13/talk-about-c-macros/">GNU: The C Preprocessor 導讀</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-10-13T05:13:00+08:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>13</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>5:13 am</span></time>
+        
+           | <a href="/blog/2013/10/13/talk-about-c-macros/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/10/13/talk-about-c-macros/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>C語言的前置處理(CPP: C preprocessor)是個很有趣的題目，知道在對的時機使用他們絕對能夠對於開發軟體有巨大的幫助。以下是我閱讀<a href="http://gcc.gnu.org/onlinedocs/cpp/index.html">GNU: The C Preprocessor</a>的筆記。請注意這只是筆記，詳細資料請自行參考原本網頁。</p>
+
+<p><a name="目錄"></a></p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#%E6%B8%AC%E8%A9%A6%E7%92%B0%E5%A2%83">測試環境</a></li>
+<li><a href="#%E6%B8%AC%E8%A9%A6%E7%92%B0%E5%A2%83">概論</a></li>
+<li><a href="#Header%20Files">Header Files</a></li>
+<li><a href="#%E5%B7%A8%E9%9B%86">巨集</a></li>
+<li><a href="#Preprocessor%20Output">Preprocessor Output</a></li>
+<li><a href="#gcc%E5%92%8CCPP%E7%9B%B8%E9%97%9C%E7%9A%84%E5%8F%83%E6%95%B8">gcc和CPP相關的參數</a></li>
+<li><a href="#%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99">參考資料</a></li>
+</ul>
+
+
+<p><a name="測試環境"></a></p>
+
+<h2>測試環境</h2>
+
+<ul>
+<li><p>Ubuntu 12.04</p></li>
+<li><p><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></p></li>
+</ul>
+
+
+<p><a name="概論"></a></p>
+
+<h2>概論</h2>
+
+<ul>
+<li>Preprocesser: 輸入文字，產生更動過的文字x。產生出來文字會當作另外執行程式的輸入資料。 <a href="http://en.wikipedia.org/wiki/Preprocessor">出處</a></li>
+<li>CNU C有自訂專用的Preprocessor指令，如果程式有移植性考量，gcc可以加入<code>-std=c90</code>, <code>-std=c99</code>或<code>-std=c11</code>參數檢查。全開就用<code>-pedantic</code>參數</li>
+</ul>
+
+
+<h3>編碼</h3>
+
+<ul>
+<li>Source character set
+
+<ul>
+<li>為gcc內部CPP處理的字元編碼</li>
+<li>gcc 讀入原始碼後會以UTF-8同構的字元編碼處理程式碼，CPP處理時的文字輸出(如gcc -E)也是使用Source character set</li>
+<li>可使用<code>-finput-charset=</code>參數指定source file 字元編碼</li>
+</ul>
+</li>
+<li>Execution character set
+
+<ul>
+<li>CPP處理結束後會將結果轉換成指定的編碼，預設仍然是UTF8</li>
+<li>後面看不懂，不想看</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>初始行為</h3>
+
+<ul>
+<li>Load檔案到記憶體內。GCC 支援不同Line end 格式(LF, CR LF, CR)
+
+<ul>
+<li>標準C 最後一行沒有line end是未定義行為，GCC會跳出警告訊息</li>
+</ul>
+</li>
+<li>處理trigraphs
+
+<ul>
+<li>史前遺跡，早期有些電腦沒有C需要的字元而使用trigraphs代替。如<code>??/</code> 代表 <code>\</code></li>
+<li>需要gcc參數設定才會支援</li>
+</ul>
+</li>
+<li>將\斷行的statemenet合併成一行</li>
+<li>把註解換成空白字元</li>
+</ul>
+
+
+<h3>取Token</h3>
+
+<ul>
+<li>空白鍵為分隔空白的單位</li>
+<li>由左至右順序取token <code>a+++++b</code> -> <code>a++ ++ +b</code>而不是<code>a++ + ++b</code></li>
+<li>Preprocessor token分類
+
+<ul>
+<li>identifiers: 單純的C合法token 如keyword, 字母和數字的組合</li>
+<li>preprocessing numbers: 一般來說就是數字</li>
+<li>String literals: 兩個<code>"</code>中間包含的字串，包括<code>#include "test.h"</code></li>
+<li>Punctuators: @ $ ` 以外ASCII的標點符號</li>
+<li>other: 直接pass到preprocessr output，一般來說C compiler會把other token打槍。
+
+<ul>
+<li>Other chars:
+
+<ul>
+<li>@</li>
+<li>$</li>
+<li>`</li>
+<li>不是NUL的control char</li>
+<li>ASCII 0x7F–0xFF (因為要支援國際字元、未來會討論存廢)</li>
+</ul>
+</li>
+<li>NUL在註解中會被忽略，一般程式碼則視為空白</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>基本上，preprocesser 輸出就是一個token</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define MY() ddd</span>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">i</span><span class="p">,</span><span class="n">MY</span><span class="p">()</span><span class="n">__</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">return</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>展開後就是</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">## 1 &quot;b.c&quot;</span>
+</span><span class='line'><span class="cp">## 1 &quot;&lt;built-in&gt;&quot;</span>
+</span><span class='line'><span class="cp">## 1 &quot;&lt;command-line&gt;&quot;</span>
+</span><span class='line'><span class="cp">## 1 &quot;b.c&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">i</span><span class="p">,</span><span class="n">ddd</span> <span class="n">__</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">return</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Preprossessor 語法概要</h3>
+
+<ul>
+<li>包含指令(directives)和巨集(macros)</li>
+<li>提供
+
+<ul>
+<li>include檔案</li>
+<li>巨集展開</li>
+<li>條件式編譯</li>
+<li>行號控制：目前不是很懂，看起來是可以告訴compiler編譯intermediate時該statement是從哪個檔案的那一行過來的</li>
+<li>compile時可以吐error或warning</li>
+</ul>
+</li>
+<li><p>除了gcc內建的directives外，directives以<code>#</code>開頭，前後都可以有空白</p></li>
+<li><p><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></p></li>
+</ul>
+
+
+<p><a name="Header Files"></a></p>
+
+<h2>Header Files</h2>
+
+<ul>
+<li>Header file就是檔案，該檔案包含下面的元件，讓不同原始碼檔案共用。
+
+<ul>
+<li>C declarations</li>
+<li>巨集</li>
+</ul>
+</li>
+<li>原始碼檔案透過#include去取用這些Header Files的資料</li>
+<li><code>#include</code>效果和複製header file到原始碼檔案一樣。你可以用<code>gcc -E 原始碼檔名</code>看到header file被放入。之所以這樣做就是讓使用者省去複製和多次修改相同介面的時間。</li>
+</ul>
+
+
+<h3>#include語法</h3>
+
+<ul>
+<li><code>#include &lt;file&gt;</code>
+
+<ul>
+<li>使用系統內建的標頭檔。標頭檔除了放在預設的目錄外，還可以在GCC下使用<code>-I</code>參數指定標頭檔路徑</li>
+</ul>
+</li>
+<li><code>#include "file"</code>
+
+<ul>
+<li>自己原始碼專用的標頭檔。GCC搜尋順序
+
+<ul>
+<li>同一份原始檔的目錄</li>
+<li><code>-iquote</code>指定的目錄</li>
+<li><code>-I</code>指定的目錄</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>標頭擋路徑</h2>
+
+<ul>
+<li><code>echo | gcc -v -x c -E -</code>可以列出gcc 搜尋標頭檔目錄</li>
+<li>gcc搜尋標頭檔順序是
+
+<ul>
+<li>系統預設路徑</li>
+<li><code>-I</code>參數，一個以上<code>-I</code>路徑則由左至右開始搜尋</li>
+</ul>
+</li>
+<li>可以使用<code>-nostdinc</code>讓gcc不去搜尋系統標準的include path</li>
+</ul>
+
+
+<h2>避免因為多重#include重複定義</h2>
+
+<ul>
+<li>狀況說明
+
+<ul>
+<li>原始碼檔案中include &ldquo;file1&#8221;和&#8221;file2&rdquo;</li>
+<li>&ldquo;file2&#8221;也有include &#8220;file1&rdquo;</li>
+<li>最後變成原始碼檔案中放了兩份file1的內容，一方面多餘另一方面也會發生重複定義的情況</li>
+</ul>
+</li>
+<li>建議方式: <a href="http://en.wikipedia.org/wiki/Include_guard">Include guard</a></li>
+</ul>
+
+
+<figure class='code'><figcaption><span>Include guard example</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#ifndef MY_HEADER_H</span>
+</span><span class='line'><span class="cp">#define MY_HEADER_H</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#define MY_VAR (1)</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#endif </span><span class="cm">/* MY_HEADER_H */</span><span class="cp"></span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Computed Includes</h2>
+
+<ul>
+<li>用來節省太多條件式#include如</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>條件式include</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#ifdef LINUX</span>
+</span><span class='line'>    <span class="cp">#include &lt;linux_plat.h&gt;</span>
+</span><span class='line'><span class="cp">#else</span>
+</span><span class='line'>    <span class="cp">#include &lt;windows_plat.h&gt;</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>使用方式</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>C檔案</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include MY_DEF_H</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">CFLAGS</span><span class="o">=</span>-DMY_DEF_H<span class="o">=</span><span class="s2">&quot;&lt;linux_plat.h&gt;&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>System Headers</h2>
+
+<ul>
+<li><p>GCC會忽略掉系統標頭檔的Warning，如果其他一般標頭檔想要有相同的處理方式，可以使用<code>-isystem 路徑</code>讓GCC將該目錄下的標頭檔視為系統標頭導</p></li>
+<li><p><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></p></li>
+</ul>
+
+
+<p><a name="巨集"></a></p>
+
+<h2>巨集</h2>
+
+<ul>
+<li>Marco分成
+
+<ul>
+<li>擬函數巨集: <code>#define foo()</code>: 重點是()，()前面不得有空格
+
+<ul>
+<li>定義完後可以直接當作function使用，所以可以玩<code>callback = foo;</code>這樣的描述</li>
+</ul>
+</li>
+<li>資料相關巨集</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>擬函數巨集</h3>
+
+<ul>
+<li>擬函數巨集可以吃參數，以<code>,</code>分開。所以<code>MAC(buf[x = 1, u + 1])</code>這樣的程式碼會被拆成兩個參數，請使用<code>MAC((buf[x = 1, u + 1]))</code></li>
+<li>擬函數巨集的參數可以空白，多個參數請用<code>,</code>隔開。</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>擬函數巨集參數空白範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define MY_MAC(x,y) my_mac(x,y)</span>
+</span><span class='line'><span class="p">...</span>
+</span><span class='line'><span class="n">MY_MAC</span><span class="p">(,);</span>
+</span><span class='line'><span class="n">MY_MAC</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">);</span>
+</span><span class='line'><span class="n">MY_MAC</span><span class="p">(</span><span class="n">a</span><span class="p">,);</span>
+</span><span class='line'><span class="n">MY_MAC</span><span class="p">(,</span><span class="n">b</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>擬函數巨集定義的描述如果有使用<code>"</code>並且和參數相同，最後並不會被替換。
+
+<ul>
+<li><code>FOO(X) _bar(x, "x");</code> -> <code>FOO(bar) _bar(bar, "x");</code></li>
+</ul>
+</li>
+</ul>
+
+
+<h3>字串轉換</h3>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define ENCLOSE_QUOTE(VAR) #VAR</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>ENCLOSE_QUOTE(test);</code> -> <code>"test"</code></li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define PLAY 0</span>
+</span><span class='line'><span class="cp">#define ENCLOSE_QUOTE(VAR) #VAR</span>
+</span><span class='line'><span class="cp">#define TO_STR(VAR) ENCLOSE_QUOTE(VAR)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>ENCLOSE_QUOTE(PLAY);</code> -> <code>"PLAY"</code></li>
+<li><code>TO_STR(PLAY)</code> -> <code>ENCLOSE_QUOTE(0)</code> -> <code>"0"</code>
+
+<ul>
+<li>利用擬函數巨集展開參數的特性</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>合體</h3>
+
+<p><code>echo -e "#define  MYDEF(PARAM1, PARAM2)  PARAM1##PARAM2 \n\n MYDEF(xxx, yyy)" | gcc -E -x c -</code></p>
+
+<h3>Variadic Macros:  兩種方式，不能一個巨集同時使用</h3>
+
+<ul>
+<li>C99語法：<code>#define my_printf(...) printf("myprintf: " __VA_ARGS__)</code></li>
+<li>GNU語法：<code>#define my_printf(arg...) printf("myprintf: " args)</code></li>
+<li>可以在varidic marco中明確指定參數
+
+<ul>
+<li><code>#define my_printf(format, ...) fprintf(stderr, format, __VA_ARGS__)</code>
+
+<ul>
+<li>缺點: 使用<code>my_printf("test");</code>會GG，因為被轉成<code>fprintf(stderr, "test",);</code></li>
+<li>解法: <code>#define my_printf(format, ...) fprintf(stderr, format, ##__VA_ARGS__)</code>
+
+<ul>
+<li>GNU會把<code>,</code> 硬食掉</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<h3>GNU C支援的predefined Macros (節錄)</h3>
+
+<h4>標準Macro: 可以望文生義就不解釋了</h4>
+
+<ul>
+<li><code>__FILE__</code></li>
+<li><code>__LINE__</code></li>
+<li><code>__func__</code>
+
+<ul>
+<li>GCC也有一樣功能的<code>__FUNCTION__</code></li>
+</ul>
+</li>
+<li><code>__DATE__</code></li>
+<li><code>__TIME__</code></li>
+<li><code>__STDC__</code>：顯示目前是否使用Standard C編譯程式碼</li>
+<li><code>__STDC_VERSION__</code>：Standard C版本</li>
+<li><code>__cplusplus</code>：是否為C++編譯環境</li>
+<li><code>__OBJC__</code>：是否為object C編譯環境</li>
+<li><code>__ASSEMBLER__</code>：是否在組合語言環境</li>
+</ul>
+
+
+<h4>GNU Marco</h4>
+
+<ul>
+<li><code>__COUNTER__</code>：回傳一個從0開始的數字，每次呼叫一次加一</li>
+<li>GCC版本
+
+<ul>
+<li><code>__VERSION__</code></li>
+<li>細部版號
+
+<ul>
+<li><code>__GNUC__</code></li>
+<li><code>__GNUC_MINOR__</code></li>
+<li><code>__GNUC_PATCHLEVEL__</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>__GNUG__</code>：是否是用GNU C++</li>
+<li><code>__INCLUDE_LEVEL__</code>：標頭檔被引用的深度，從0開始算。如a->b->c，c就是2</li>
+<li><code>__ELF__</code>：輸出格式是否為elf</li>
+<li><code>__TIMESTAMP__</code></li>
+</ul>
+
+
+<h3>系統內建Macro</h3>
+
+<ul>
+<li>和平台有關，使用下面指令查詢：<code>echo "" | gcc -x c -E -dM -</code></li>
+<li>C標準規範使用<code>__</code>包夾或是<code>_</code>+<code>大寫</code>為系統內建Macro，其name space保留。</li>
+</ul>
+
+
+<h3>Undefine/Redefine</h3>
+
+<figure class='code'><figcaption><span>Undefine/Redefine範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define FOO BAR</span>
+</span><span class='line'><span class="p">...</span>
+</span><span class='line'><span class="cp">#undef FOO</span>
+</span><span class='line'><span class="cp">#define FOO BAR2</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>密技和怪招</h3>
+
+<h4>Misnesting</h4>
+
+<ul>
+<li>間接呼叫</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>間接呼叫範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define MY_PRT(X) printf(x)</span>
+</span><span class='line'><span class="cp">#define P_TEST(M) M(&quot;test&quot;)</span>
+</span><span class='line'><span class="p">...</span>
+</span><span class='line'><span class="n">P_TEST</span><span class="p">(</span><span class="n">MY_PRT</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>不對稱的括號</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>不對稱的括號範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define TEST(x) func1(x, &quot;test&quot;</span>
+</span><span class='line'><span class="p">...</span>
+</span><span class='line'><span class="n">test</span><span class="p">(</span><span class="n">my_param</span><span class="p">));</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>硬食分號</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>test.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define MY_TEST(x) { printf(&quot;test\n&quot;); }</span>
+</span><span class='line'><span class="p">...</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">bit</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">MY_TEST</span><span class="p">(</span><span class="n">bit</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>      <span class="nf">printf</span><span class="p">(</span><span class="s">&quot;else</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>編譯會錯誤，原因是因為分號會讓gcc判斷if statement已經結束</p>
+
+<figure class='code'><figcaption><span>錯誤訊息</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>cc     test.c   -o test
+</span><span class='line'>test.c: In function ‘main’:
+</span><span class='line'>test.c:23:5: error: ‘else’ without a previous ‘if’
+</span><span class='line'>make: *** [test] Error 1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>解法: <code>do {...} while (0)</code></li>
+</ul>
+
+
+<figure class='code'><figcaption><span>test.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define MY_TEST(x) do { printf(&quot;test\n&quot;); } while(0)</span>
+</span><span class='line'><span class="p">...</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">bit</span><span class="p">)</span>
+</span><span class='line'>      <span class="n">MY_TEST</span><span class="p">(</span><span class="n">bit</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>      <span class="nf">printf</span><span class="p">(</span><span class="s">&quot;else</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<ul>
+<li><p>除非明確了解巨集內容，否則避免直接傳函數進去巨集。<code>MY_TEST(func(xy,xx), 10));</code></p>
+
+<ul>
+<li>原因是巨集內也許會呼叫參數好幾次，如果傳進去的函數執行成本很高，就會發生悲劇。</li>
+</ul>
+</li>
+<li><p><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></p></li>
+</ul>
+
+
+<p><a name="Preprocessor Output"></a></p>
+
+<h2>Preprocessor Output</h2>
+
+<ul>
+<li>可以使用<code>gcc -E 檔案</code>或是<code>cpp 檔案</code>觀察CPP的展開，和CPP相關格式請參考<a href="http://gcc.gnu.org/onlinedocs/cpp/Preprocessor-Output.html#Preprocessor-Output">這邊</a>。</li>
+<li><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></li>
+</ul>
+
+
+<p><a name="gcc和CPP相關的參數"></a></p>
+
+<h2>gcc和CPP相關的參數</h2>
+
+<ul>
+<li>大部分選項和參數可以以空白隔開(<code>-I /usr/include</code>)或是直接連在一起(<code>-I/usr/include</code>)</li>
+</ul>
+
+
+<h3>節錄</h3>
+
+<ul>
+<li><code>-D 文字</code>: 定義<code>文字</code>巨集為1
+
+<ul>
+<li>測試<code>echo "TEST" | gcc -E -xc -DTEST -</code></li>
+</ul>
+</li>
+<li><code>-D 文字=文字</code>：定義<code>文字</code>巨集
+
+<ul>
+<li>測試<code>echo "TEST" | gcc -E -xc -DTEST=CPP -</code></li>
+</ul>
+</li>
+<li><code>-U</code>: undefine 巨集，如果參數同時有<code>-U</code>和<code>-D</code>的話優先先出現的先做</li>
+<li><code>-I dir</code>:指定搜尋header file目錄
+
+<ul>
+<li><code>dir</code>以<code>=</code>開頭，gcc會取代成sysroot路徑，參考<code>--sysroot</code>和<code>-isysroot</code></li>
+</ul>
+</li>
+<li><code>-M</code>:列出要檔案要吃的source code和header files
+
+<ul>
+<li>測試:</li>
+</ul>
+</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>-M範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="err">$</span> <span class="err">gcc</span> <span class="err">-M</span> <span class="err">b.c</span>
+</span><span class='line'><span class="nf">b.o</span><span class="o">:</span> <span class="n">b</span>.<span class="n">c</span> /<span class="n">usr</span>/<span class="n">lib</span>/<span class="n">gcc</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/4.6/<span class="n">include</span>/<span class="n">stdint</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">stdint</span>.<span class="n">h</span> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">features</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">predefs</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">sys</span>/<span class="n">cdefs</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">wordsize</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">gnu</span>/<span class="n">stubs</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">gnu</span>/<span class="n">stubs</span>-64.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">wchar</span>.<span class="n">h</span> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">stdio</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">lib</span>/<span class="n">gcc</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/4.6/<span class="n">include</span>/<span class="n">stddef</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">types</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">typesizes</span>.<span class="n">h</span> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">libio</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">_G_config</span>.<span class="n">h</span> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">wchar</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">lib</span>/<span class="n">gcc</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/4.6/<span class="n">include</span>/<span class="n">stdarg</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">stdio_lim</span>.<span class="n">h</span> \
+</span><span class='line'> /<span class="n">usr</span>/<span class="n">include</span>/<span class="n">x</span>86<span class="n">_</span>64-<span class="n">linux</span>-<span class="n">gnu</span>/<span class="n">bits</span>/<span class="n">sys_errlist</span>.<span class="n">h</span> <span class="n">b</span>.<span class="n">h</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-MM</code>:列出要檔案要吃的source code和非系統的header files</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ gcc -MM b.c
+</span><span class='line'>b.o: b.c b.h
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-MF file</code>:配合<code>-M</code>, <code>-MM</code>時將結果寫入<code>file</code></li>
+<li><code>-MG</code>: <code>-M</code>, <code>-MM</code>parse到header file不存在會跳錯誤，而加上<code>-MG</code>後會假裝他們存在，照樣吐出結果。</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>-MG範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ mv b.h a
+</span><span class='line'>$ gcc   -MM b.c
+</span><span class='line'>b.c:3:15: fatal error: b.h: No such file or directory
+</span><span class='line'>compilation terminated.
+</span><span class='line'>$ gcc -MG  -MM b.c
+</span><span class='line'>b.o: b.c b.h
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-MP</code>: 順便把depend的target加入</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>-MP範例 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ gcc -MP -MM b.c
+</span><span class='line'>b.o: b.c b.h
+</span><span class='line'>
+</span><span class='line'>b.h:
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-MT</code> :指定target</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>-MT範例 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ gcc -MT test -MM b.c
+</span><span class='line'>test: b.c b.h
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-MD</code>: 直接編譯，同時把會吃的檔案和header files放在*.d檔</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>-MD範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ rm a.out
+</span><span class='line'>$ gcc -MD b.c
+</span><span class='line'>$ ls a.out
+</span><span class='line'>a.out
+</span><span class='line'>$ cat b.d
+</span><span class='line'>b.o: b.c /usr/lib/gcc/x86_64-linux-gnu/4.6/include/stdint.h \
+</span><span class='line'> /usr/include/stdint.h /usr/include/features.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/predefs.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/wchar.h /usr/include/stdio.h \
+</span><span class='line'> /usr/lib/gcc/x86_64-linux-gnu/4.6/include/stddef.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/types.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/typesizes.h /usr/include/libio.h \
+</span><span class='line'> /usr/include/_G_config.h /usr/include/wchar.h \
+</span><span class='line'> /usr/lib/gcc/x86_64-linux-gnu/4.6/include/stdarg.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
+</span><span class='line'> /usr/include/x86_64-linux-gnu/bits/sys_errlist.h b.h
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-MMD</code>: 直接編譯，同時把會吃的檔案和非系統header files放在*.d檔</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>-MMD範例</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ rm a.out
+</span><span class='line'>$ gcc -MMD b.c
+</span><span class='line'>$ ls a.out
+</span><span class='line'>a.out
+</span><span class='line'>$ cat b.d
+</span><span class='line'>b.o: b.c b.h
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><code>-dM</code>: 列出編譯時所有的巨集，不列出展開巨集的結果, 通常配合<code>-E</code></li>
+<li><code>-dD</code>: 列出編譯時不包含predefine的巨集以及展開巨集的結果, 通常配合<code>-E</code></li>
+<li><code>-dN</code>: 和<code>-dD</code>的差別是巨集只列出名稱不列出要展開的內容, 通常配合<code>-E</code>
+
+<ul>
+<li><code>#define foo bar</code> <code>-dD</code>輸出 <code>#define foo bar</code>，<code>-dN</code>結果 <code>#define foo</code></li>
+</ul>
+</li>
+<li><code>-dI</code>:不顯是巨集，而是顯示<code>#include</code>的指令</li>
+<li><code>-C</code>: 保留註解，不包含巨集展開的部份註解</li>
+<li><code>-CC</code>: 保留註解，包含巨集展開的部份註解</li>
+<li><p><code>-H</code>:列出編譯時會參考的header files</p></li>
+<li><p><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></p></li>
+</ul>
+
+
+<p><a name="參考資料"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="http://gcc.gnu.org/onlinedocs/cpp/index.html">GNU: The C Preprocessor</a></li>
+<li>測試檔案</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>b.c </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;stdint.h&gt;</span>
+</span><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'><span class="cp">#include &quot;b.h&quot;</span>
+</span><span class='line'>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#define foo  (bit,lfsr) </span><span class="cm">/* XXX */</span><span class="cp"></span>
+</span><span class='line'><span class="cp">#define bar(x) lose(x)</span>
+</span><span class='line'><span class="cp">#define lose(x) (1 + (x))</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#if aaa</span>
+</span><span class='line'><span class="cp">#define ddd ddds</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="kt">uint16_t</span> <span class="n">lfsr</span> <span class="o">=</span> <span class="n">time</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>    <span class="kt">unsigned</span> <span class="n">bit</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">unsigned</span> <span class="n">period</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">c</span><span class="o">=</span> <span class="mi">644</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__BASE_FILE__</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__VERSION__</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="n">bit</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">MY_TEST</span><span class="p">(</span><span class="n">bit</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>        <span class="n">MY_TEST</span><span class="p">(</span><span class="n">bit</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">lfsr</span><span class="p">,</span><span class="n">bit</span><span class="p">,</span><span class="n">c</span><span class="p">));</span>
+</span><span class='line'>        <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">bit</span><span class="p">,</span> <span class="n">lfsr</span><span class="p">));</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#line 10</span>
+</span><span class='line'><span class="n">printf</span><span class="p">(</span><span class="s">&quot;test:%d, %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__LINE__</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#if 0</span><span class="c"></span>
+</span><span class='line'><span class="c">    lfsr = typeof(bit) 10;</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">bar</span><span class="p">(</span><span class="n">foo</span><span class="p">);</span>
+</span><span class='line'><span class="n">printf</span><span class="p">(</span><span class="s">&quot;test:%d, %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__LINE__</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<figure class='code'><figcaption><span>b.h</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#define MY_TEST(x) do { printf(&quot;test\n&quot;); } while(0)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li><a href="#%E7%9B%AE%E9%8C%84">回目錄</a></li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/10/07/introduction-to-freertos-readings/">FreeRTOS 筆記</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-10-07T13:26:00+08:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>7</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>1:26 pm</span></time>
+        
+           | <a href="/blog/2013/10/07/introduction-to-freertos-readings/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/10/07/introduction-to-freertos-readings/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p><a href="http://www.aosabook.org/en/freertos.html">出處:The Architecture of Open Source Applications (Volume 2): FreeRTOS</a></p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#%E7%B0%A1%E4%BB%8B">簡介</a></li>
+<li><a href="#%E6%9E%B6%E6%A7%8B">架構</a></li>
+<li><a href="#Task%20Scheduling">Task Scheduling</a></li>
+<li><a href="#Tasks">Tasks</a>
+
+<ul>
+<li><a href="#xTaskCreate">Create Task</a></li>
+</ul>
+</li>
+<li><a href="#Lists">Lists</a></li>
+</ul>
+
+
+<p><a name="簡介"></a></p>
+
+<h2>簡介</h2>
+
+<ul>
+<li><a href="www.freertos.org/%E2%80%8E">FreeRTOS</a>是基於GPLv2授權的開源自由RTOS</li>
+<li>支援多種平台架構</li>
+</ul>
+
+
+<p><a name="架構"></a></p>
+
+<h2>架構</h2>
+
+<ul>
+<li>FreeRTOS元件有三個
+
+<ul>
+<li>Tasks：使用者行撰寫含有優先權的C語言程式碼，為RTOS執行的單位</li>
+<li>Communication：提供Tasks和中斷之間溝通的管道</li>
+<li>硬體包裝層：提供介面分隔操作實際硬體和RTOS行為</li>
+</ul>
+</li>
+<li>軟體階層
+
+<ul>
+<li>User task和ISR</li>
+<li>硬體抽象化後的程式碼</li>
+<li>硬體相關程式碼
+
+<ul>
+<li>放置於: FreeRTOS/Source/portable/平台
+
+<ul>
+<li>port.c/ portmacro.h</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>硬體</li>
+</ul>
+</li>
+<li>FreeRTOS/Demo/[平台]/FreeRTOSConfig.h存放硬體相關設定如Clock和stack size等</li>
+<li>FreeRTOS透過巨集來將硬體無關的程式碼對應到硬體相關的實作</li>
+</ul>
+
+
+<p><a name="Task Scheduling"></a></p>
+
+<h2>Task Scheduling</h2>
+
+<ul>
+<li>FreeRTOS使用陣列list來管理task Prority
+
+<ul>
+<li><code>static xList pxReadyTasksLists[ configMAX_PRIORITIES ];</code></li>
+</ul>
+</li>
+<li>每次tick中斷起來就叫一次<code>vTaskSwitchContext()</code></li>
+<li><code>vTaskSwitchContext()</code>
+
+<ul>
+<li>根據優先權從ready list由高到低挑出一個list
+
+<ul>
+<li>如果高優先權已經沒有task，再從下一個優先權list挑</li>
+</ul>
+</li>
+<li>從該list中挑出上一次跑過的task下一個task</li>
+<li>開始執行task</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="Tasks"></a></p>
+
+<h2>Tasks</h2>
+
+<ul>
+<li>TCB: Task control block，為FreeRTOS的重要資料結構，提供
+
+<ul>
+<li>Stack資訊</li>
+<li>List資訊</li>
+<li>Event資訊</li>
+<li>優先權</li>
+<li>&hellip;</li>
+</ul>
+</li>
+<li>Task狀態：每一個狀態就是對應到一個task list
+
+<ul>
+<li>Running</li>
+<li>Ready</li>
+<li>Suspend</li>
+<li>Block</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="xTaskCreate"></a></p>
+
+<h3>Create Task流程</h3>
+
+<ul>
+<li>產生並設定TCB</li>
+<li>設定stack及硬體context switch 會用到的暫存器</li>
+<li>Disable 中斷避免有人更動TCB資訊</li>
+<li>把TCB加入List中、系統初始化還會Init list
+
+<ul>
+<li>Ready list</li>
+<li>Suspend list</li>
+<li>Kill list</li>
+<li>Delay list</li>
+</ul>
+</li>
+<li>處理完list後enable中斷</li>
+</ul>
+
+
+<p><a name="Lists"></a></p>
+
+<h2>Lists</h2>
+
+<ul>
+<li>FreeRTOS list使用doule 環狀link</li>
+<li>list node會指向一個TCB</li>
+<li>list 依<code>xItemValue</code>順序排列</li>
+<li>list 會指向container，該container提供
+
+<ul>
+<li>list node個數</li>
+<li>起始node</li>
+<li>結束node</li>
+<li>指到目前系統處理的node</li>
+</ul>
+</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/10/05/ubuntu-personal-use-tool-finishing/">[Ubuntu 14.04] 安裝完系統後新增工具整理</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-10-05T00:11:00+08:00'><span class='date'><span class='date-month'>Oct</span> <span class='date-day'>5</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>12:11 am</span></time>
+        
+           | <a href="/blog/2013/10/05/ubuntu-personal-use-tool-finishing/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/10/05/ubuntu-personal-use-tool-finishing/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>安裝完作業系統後還需要裝一些平常使用的工具，順手整理一下</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#%E6%87%B6%E4%BA%BA%E5%8C%85">懶人包</a></li>
+<li><a href="#%E5%B7%A5%E5%85%B7%E5%88%86%E9%A1%9E%E5%8F%8A%E7%B0%A1%E5%96%AE%E8%AA%AA%E6%98%8E">工具分類及簡單說明</a>
+
+<ul>
+<li> <a href="#%E7%B3%BB%E7%B5%B1%E7%A8%8B%E5%BC%8F%E9%96%8B%E7%99%BC%E5%A5%97%E4%BB%B6">系統程式開發套件</a></li>
+<li> <a href="#%E7%A8%8B%E5%BC%8F%E9%96%8B%E7%99%BC%E8%BC%94%E5%8A%A9%E5%B7%A5%E5%85%B7">程式開發輔助工具</a></li>
+<li> <a href="#%E4%B8%80%E8%88%AC%E5%B7%A5%E5%85%B7">一般工具</a></li>
+<li> <a href="#%E8%B3%87%E5%AE%89%E5%B7%A5%E5%85%B7">資安工具</a></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="懶人包"></a></p>
+
+<h2>懶人包</h2>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>sudo apt-get install build-essential
+</span><span class='line'>sudo apt-get install ccache
+</span><span class='line'>sudo apt-get install bison 
+</span><span class='line'>sudo apt-get install flex
+</span><span class='line'>sudo apt-get install automake
+</span><span class='line'>sudo apt-get install libtools
+</span><span class='line'>sudo apt-get install intltool
+</span><span class='line'>sudo apt-get install libgtk2.0-dev
+</span><span class='line'>sudo apt-get install libncurses5-dev
+</span><span class='line'>
+</span><span class='line'>sudo apt-get install git-svn
+</span><span class='line'>sudo apt-get install tig
+</span><span class='line'>sudo apt-get install meld
+</span><span class='line'>sudo apt-get install cscope
+</span><span class='line'>sudo apt-get install vim-gtk
+</span><span class='line'>sudo apt-get install fonts-inconsolata
+</span><span class='line'>sudo apt-get install geany
+</span><span class='line'>sudo apt-get install joe
+</span><span class='line'>sudo apt-get install doxygen-gui
+</span><span class='line'>sudo apt-get install exuberant-ctags
+</span><span class='line'>sudo apt-get install manpages-dev
+</span><span class='line'>sudo apt-get install manpages-posix-dev
+</span><span class='line'>sudo apt-get install minicom
+</span><span class='line'>
+</span><span class='line'>sudo apt-get install tree
+</span><span class='line'>sudo apt-get install terminator
+</span><span class='line'>sudo apt-get install ttf-mscorefonts-installer 
+</span><span class='line'>sudo apt-get install ack-grep
+</span><span class='line'>sudo apt-get install pandoc
+</span><span class='line'>sudo apt-get install gnome-system-tools
+</span><span class='line'>sudo apt-get install ghex
+</span><span class='line'>sudo apt-get install mc
+</span><span class='line'>sudo apt-get install dict
+</span><span class='line'>sudo apt-get install wireshark
+</span><span class='line'>sudo apt-get install mtr
+</span><span class='line'>sudo apt-get install pdfgrep
+</span><span class='line'>sudo apt-get install sshfs
+</span><span class='line'>
+</span><span class='line'>sudo apt-get install fail2ban
+</span><span class='line'>sudo apt-get install rkhunter</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="工具分類及簡單說明"></a></p>
+
+<h2>工具分類及簡單說明</h2>
+
+<p><a name="系統程式開發套件"></a></p>
+
+<h3>系統程式開發套件 (不解釋)</h3>
+
+<ul>
+<li>build-essential</li>
+<li>ccache</li>
+<li>bison</li>
+<li>flex</li>
+<li>automake</li>
+<li>libtools</li>
+<li>intltool</li>
+<li>libgtk2.0-dev</li>
+<li>libncurses5-dev</li>
+</ul>
+
+
+<p><a name="程式開發輔助工具"></a></p>
+
+<h3>程式開發輔助工具</h3>
+
+<ul>
+<li>git-svn
+
+<ul>
+<li>git, svn, git-svn三個願望一次滿足</li>
+</ul>
+</li>
+<li>tig
+
+<ul>
+<li>文字介面的git管理工具</li>
+</ul>
+</li>
+<li>meld
+
+<ul>
+<li>GUI介面的檔案比較工具</li>
+</ul>
+</li>
+<li>cscope
+
+<ul>
+<li>追蹤程式碼工具，可以查詢函數被誰呼叫，宣告等功能。請配合vim服用</li>
+</ul>
+</li>
+<li>exuberant-ctags
+
+<ul>
+<li>追蹤程式碼工具，可以切入函數呼叫等功能。請配合vim服用</li>
+</ul>
+</li>
+<li>vim-gtk
+
+<ul>
+<li>vim和gvim兩個願望一次滿足</li>
+</ul>
+</li>
+<li>fonts-inconsolata
+
+<ul>
+<li>給開發程式時的GUI編輯器使用，因為不希望因為粗體斜體等效果干擾字元對齊</li>
+</ul>
+</li>
+<li>geany
+
+<ul>
+<li>簡單好用的GUI編輯</li>
+</ul>
+</li>
+<li>joe
+
+<ul>
+<li>文字介面的WordStar式介面編輯器</li>
+</ul>
+</li>
+<li>doxygen-gui
+
+<ul>
+<li>文件產生器和他的Front UI</li>
+</ul>
+</li>
+<li>ghex
+
+<ul>
+<li>GUI 16進位檔案檢視工具</li>
+</ul>
+</li>
+<li>manpages-dev
+
+<ul>
+<li>更多男人</li>
+</ul>
+</li>
+<li>manpages-posix-dev
+
+<ul>
+<li>POSIX男人，查phread用</li>
+</ul>
+</li>
+<li>minicom
+
+<ul>
+<li>Serial port終端機工具</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="一般工具"></a></p>
+
+<h3>一般工具</h3>
+
+<ul>
+<li>tree
+
+<ul>
+<li>文字介面使用樹狀結構顯示檔案</li>
+</ul>
+</li>
+<li>terminator
+
+<ul>
+<li>增強版gnome-terminal，可以同一個畫面任意新增分割的終端</li>
+</ul>
+</li>
+<li>ttf-mscorefonts-installer
+
+<ul>
+<li>主要是要Wingdings字型，有一堆有趣的向量ICON可以用</li>
+</ul>
+</li>
+<li>ack-grep
+
+<ul>
+<li>學長推荐的加強版grep，還不熟</li>
+</ul>
+</li>
+<li>pandoc
+
+<ul>
+<li>吃markdown語法產生其他文件如pdf</li>
+</ul>
+</li>
+<li>gnome-system-tools
+
+<ul>
+<li>需要GUI使用者管理所以安裝</li>
+</ul>
+</li>
+<li>mc
+
+<ul>
+<li>文字介面的norton commander介面式檔案管理工具，除了複製搬移外、還可以解壓縮檔案</li>
+</ul>
+</li>
+<li>dict
+
+<ul>
+<li>文字介面查英文單字用</li>
+</ul>
+</li>
+<li>wireshark
+
+<ul>
+<li>分析封包的工具</li>
+</ul>
+</li>
+<li>mtr
+
+<ul>
+<li>加強版的ping + tracert工具</li>
+</ul>
+</li>
+<li>pdfgrep
+
+<ul>
+<li>grep pdf檔案的工具</li>
+</ul>
+</li>
+<li>sshfs
+
+<ul>
+<li>可以透過ssh mount遠端的帳號</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="資安工具"></a></p>
+
+<h3>資安工具</h3>
+
+<ul>
+<li>rkhunter
+
+<ul>
+<li>掃rootkit 的工具</li>
+</ul>
+</li>
+<li>fail2ban
+
+<ul>
+<li>自動ban掉固定時間內重複嘗試連線ssh等的工具，<a href="http://newtoypia.blogspot.tw/2016/04/fail2ban.html">中文簡介</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2013/09/15/learning-markdown-syntax/">學習: Markdown語法簡介</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2013-09-15T13:53:00+08:00'><span class='date'><span class='date-month'>Sep</span> <span class='date-day'>15</span><span class='date-suffix'>th</span>, <span class='date-year'>2013</span></span> <span class='time'>1:53 pm</span></time>
+        
+           | <a href="/blog/2013/09/15/learning-markdown-syntax/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2013/09/15/learning-markdown-syntax/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>對於技術文件寫作來說，能夠省去複雜語法和繁複操作，同時又能方便的寫出好的架構和論述很重要。因此我需要</p>
+
+<ul>
+<li>直接在本文中加入簡單的Tag語法省去滑鼠操作時間</li>
+<li>明顯地文章段落顯示方式</li>
+<li>方便的支援巢狀條列語法</li>
+<li>美觀地顯示程式語言代碼</li>
+</ul>
+
+
+<p>為了做出好的文件，了解並學習Markdown語法是必經的路程。就讓我邊查資料現學現賣吧。</p>
+
+<p><a name="content"></a></p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#ref">參考資料</a></li>
+<li><a href="#syntax">語法說明</a>
+
+<ul>
+<li><a href="#header">標題</a></li>
+<li><a href="#blist">Bullet List</a></li>
+<li><a href="#nlist">數字 List</a></li>
+<li><a href="#mlist">撒尿牛丸 List</a></li>
+<li><a href="#seperater">分隔線</a></li>
+<li><a href="#font">字型</a></li>
+<li><a href="#link">連結</a></li>
+<li><a href="#code">Code</a></li>
+<li><a href="#quote">引用</a></li>
+<li><a href="#pbreak">段落用斷行</a></li>
+</ul>
+</li>
+<li><a href="#content_how">如何做出目錄</a></li>
+<li><a href="#gfm_syntax">GitHub Flavored Markdown語法</a>
+
+<ul>
+<li> <a href="#del_line">刪除線</a></li>
+<li> <a href="#fcb">Fenced code blocks</a>
+
+<ul>
+<li><a href="#gfmfcb">GitHub Flavored Markdown語法</a></li>
+<li><a href="#opfcb">Octopress語法</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="http://daringfireball.net/projects/markdown/">Markdown 官方網站(英)</a></li>
+<li><a href="http://en.wikipedia.org/wiki/Markdown">Markdown Wiki說明(英)</a></li>
+<li><a href="http://stackoverflow.com/editing-help">Stackoverflow Markdown Help(英)</a></li>
+<li><a href="https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet">Markdown Cheatsheet(英)</a></li>
+<li><a href="https://help.github.com/articles/github-flavored-markdown">GitHub Flavored Markdown(英)</a></li>
+<li><a href="http://octopress.org/docs/blogging/code/">Octopress: Sharing Code Snippets(英)</a></li>
+<li><a href="http://www.openfoundry.org/tw/resourcecatalog/Program-Development/Markup-Languages/markdown">自由軟體鑄造場的Markdown簡介(中)</a></li>
+<li><a href="http://markdown.tw/">Markdown 語法說明(中)</a></li>
+</ul>
+
+
+<p><a name="syntax"></a></p>
+
+<h2>語法說明</h2>
+
+<p><strong>注意！有些效果可以透過不同語法達成。</strong>
+<strong>本文只列出我感興趣的語法，並沒有列出完整的語法。</strong>
+<a name="header"></a></p>
+
+<h3>標題</h3>
+
+<pre><code>## 主標題
+### 次要標題
+#### 更次要標題，最多到6個#
+</code></pre>
+
+<h2>主標題</h2>
+
+<h3>次要標題</h3>
+
+<h4>更次要標題，最多到6個</h4>
+
+<p><a name="blist"></a></p>
+
+<h3>Bullet List</h3>
+
+<pre><code>- 第一層List
+    - 第二層List，和第一層隔4個空白字元或是tab
+        - 第三層List，和第二層隔4個空白字元或是tab
+</code></pre>
+
+<ul>
+<li>第一層List
+
+<ul>
+<li>第二層List，和第一層隔4個空白字元或是tab
+
+<ul>
+<li>第三層List，和第二層隔4個空白字元或是tab</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="nlist"></a></p>
+
+<h3>數字 List</h3>
+
+<pre><code>1. 第一層List
+    1. 第二層List，和第一層隔4個空白字元或是tab
+        1. 第三層List，和第二層隔4個空白字元或是tab
+</code></pre>
+
+<ol>
+<li>第一層List
+
+<ol>
+<li>第二層List，和第一層隔4個空白字元或是tab
+
+<ol>
+<li>第三層List，和第二層隔4個空白字元或是tab</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+
+
+<p><a name="mlist"></a></p>
+
+<h3>撒尿牛丸 List</h3>
+
+<pre><code>1. 第一層List
+    - 第二層List，和第一層隔4個空白字元或是tab
+        1. 第三層List，和第二層隔4個空白字元或是tab
+</code></pre>
+
+<ol>
+<li>第一層List
+
+<ul>
+<li>第二層List，和第一層隔4個空白字元或是tab
+
+<ol>
+<li>第三層List，和第二層隔4個空白字元或是tab</li>
+</ol>
+</li>
+</ul>
+</li>
+</ol>
+
+
+<p><a name="seperater"></a></p>
+
+<h3>分隔線</h3>
+
+<pre><code>***
+</code></pre>
+
+<hr />
+
+<p><a name="font"></a></p>
+
+<h3>字型</h3>
+
+<pre><code>*斜體字，字和星號中間不能空白*
+</code></pre>
+
+<p><em>斜體字，字和星號中間不能空白</em></p>
+
+<pre><code>**粗體字，字和星號中間不能空白**
+</code></pre>
+
+<p><strong>粗體字，字和星號中間不能空白</strong></p>
+
+<p><a name="link"></a></p>
+
+<h3>連結</h3>
+
+<pre><code>[本站](http://wen00072.github.io)
+</code></pre>
+
+<p><a href="http://wen00072.github.io">本站</a></p>
+
+<p><a name="code"></a></p>
+
+<h3>Code</h3>
+
+<ul>
+<li>因為要顯示程式碼，所以不會Markdown的語法
+
+<ul>
+<li>方式
+
+<ol>
+<li>行首以tab或8個空白開始</li>
+<li>使用成對的`把程式碼包起來</li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p>　- 這個bullit 效果沒有出來
+　- 這個bullit 效果沒有出來</p>
+
+<p>　̀我是程式碼　̀
+<code>我是程式碼</code></p>
+
+<p><a name="quote"></a></p>
+
+<h3>引用</h3>
+
+<pre><code>&gt; 第一層引用
+&gt;&gt; 第二層引用
+</code></pre>
+
+<blockquote><p>第一層引用</p>
+
+<blockquote><p>第二層引用</p></blockquote></blockquote>
+
+<p><a name="pbreak"></a></p>
+
+<h3>段落用斷行</h3>
+
+<pre><code>行尾沒有空白字元
+第二行
+</code></pre>
+
+<p>行尾沒有空白字元
+第二行</p>
+
+<pre><code>行尾加上兩個以上空白字元  
+第二行
+</code></pre>
+
+<p>行尾加上兩個以上空白字元<br/>
+第二行</p>
+
+<p><a name="content_how"></a></p>
+
+<h2>如何做出目錄</h2>
+
+<ol>
+<li>在文件中嵌入HTML的anchor tag</li>
+<li>同樣的文件中指定連結</li>
+</ol>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>&lt;a name="test"&gt;&lt;/a&gt;
+</span><span class='line'>[連連看](#test)</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="test"></a>
+<a href="#test">連連看</a></p>
+
+<p><a name="gfm_syntax"></a></p>
+
+<h2>GitHub Flavored Markdown</h2>
+
+<p><a name="del_line"></a></p>
+
+<h3>刪除線</h3>
+
+<pre><code>~~打我啊笨蛋，~和句子中間一樣不能有空白~~
+</code></pre>
+
+<p><del>打我啊笨蛋，~和句子中間一樣不能有空白</del></p>
+
+<p><a name="fcb"></a></p>
+
+<h3>Fenced code blocks</h3>
+
+<p><a name="gfmfcb"></a></p>
+
+<h4>GitHub Flavored Markdown語法</h4>
+
+<p>使用<pre>```</pre>把程式包起來</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> ```
+</span><span class='line'> #include &lt;stdio.h&gt;
+</span><span class='line'> int main(void)
+</span><span class='line'> { 
+</span><span class='line'>  printf("Hello World\n");
+</span><span class='line'>  return 0;
+</span><span class='line'> }
+</span><span class='line'> ```</span></code></pre></td></tr></table></div></figure>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> #include &lt;stdio.h&gt;
+</span><span class='line'> int main(void)
+</span><span class='line'> { 
+</span><span class='line'>  printf("Hello World\n");
+</span><span class='line'>  return 0;
+</span><span class='line'> }</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="opfcb"></a></p>
+
+<h4>Octopress的語法</h4>
+
+<p><a href="http://octopress.org/docs/blogging/code/">Octopress的語法</a>讓使用者提供</p>
+
+<ul>
+<li>指定語言Highlight</li>
+<li>標題</li>
+<li>URL</li>
+<li>URL文字說明</li>
+</ul>
+
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'> ```c 標題 http://wen00072.github.io URL文字說明
+</span><span class='line'> #include &lt;stdio.h&gt;
+</span><span class='line'> int main(void)
+</span><span class='line'> { 
+</span><span class='line'>  printf("Hello World\n");
+</span><span class='line'>  return 0;
+</span><span class='line'> }
+</span><span class='line'> ```</span></code></pre></td></tr></table></div></figure>
+
+
+<figure class='code'><figcaption><span>標題</span><a href='http://wen00072.github.io'>URL文字說明</a></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'> <span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'> <span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'> <span class="p">{</span>
+</span><span class='line'>  <span class="n">printf</span><span class="p">(</span><span class="s">&quot;Hello World</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+</div>
+  
+  
+
+
+    </article>
+  
+  <div class="pagination">
+    
+      <a class="prev" href="/posts/14">&larr; Older</a>
+    
+    <a href="/blog/archives">Blog Archives</a>
+    
+    <a class="next" href="/posts/12">Newer &rarr;</a>
+    
+  </div>
+</div>
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2016/06/27/arm-cm4-pratice-2-lab-led/">ARM CM4 Pratice (2): 實驗軟體專案規劃和LED閃滅實驗</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/06/25/stm32-f4xx-standard-peripherals-libraryshou-ce-zheng-li/">ARM CM4 Pratice (1): STM32 F4xx Standard Peripherals Library手冊整理</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/04/10/use-strace-to-trace-missing-files/">使用strace找出程式缺少的檔案路徑</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/04/06/arm-cm4-pratice-0-environment-setup/">ARM CM4 Pratice (0): Environment Setup</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/24/talk-about-git-remote/">談談 Git Remote</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>Top Categories</h1>
+    <ul id="top-category-list"><li><a href='/blog/categories/linux'>linux (40)</a></li><li><a href='/blog/categories/c'>c (26)</a></li><li><a href='/blog/categories/debian'>debian (16)</a></li><li><a href='/blog/categories/presentation'>presentation (14)</a></li><li><a href='/blog/categories/binutils'>binutils (10)</a></li><li><a href='/blog/categories/octopress'>octopress (8)</a></li><li><a href='/blog/categories/gan-xiang'>感想 (8)</a></li><li><a href='/blog/categories/arm'>arm (7)</a></li><li><a href='/blog/categories/make'>make (6)</a></li><li><a href='/blog/categories/git'>git (5)</a></li></ul>
+</section>
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/arm'>arm (7)</a></li><li><a href='/blog/categories/asm'>asm (1)</a></li><li><a href='/blog/categories/assembler'>assembler (2)</a></li><li><a href='/blog/categories/assembly'>assembly (3)</a></li><li><a href='/blog/categories/autotools'>autotools (4)</a></li><li><a href='/blog/categories/banana-pi'>banana pi (1)</a></li><li><a href='/blog/categories/bash'>bash (1)</a></li><li><a href='/blog/categories/bintuils'>bintuils (3)</a></li><li><a href='/blog/categories/binutil'>binutil (1)</a></li><li><a href='/blog/categories/binutils'>binutils (10)</a></li><li><a href='/blog/categories/c'>c (26)</a></li><li><a href='/blog/categories/c99'>c99 (1)</a></li><li><a href='/blog/categories/c-preprocessor'>c_preprocessor (1)</a></li><li><a href='/blog/categories/cmake'>cmake (2)</a></li><li><a href='/blog/categories/dbdoclet'>dbdoclet (1)</a></li><li><a href='/blog/categories/debian'>debian (16)</a></li><li><a href='/blog/categories/debootstrap'>debootstrap (1)</a></li><li><a href='/blog/categories/doxygen'>doxygen (1)</a></li><li><a href='/blog/categories/f9'>f9 (1)</a></li><li><a href='/blog/categories/free-software'>free_software (1)</a></li><li><a href='/blog/categories/freertos'>freertos (1)</a></li><li><a href='/blog/categories/fsf'>fsf (1)</a></li><li><a href='/blog/categories/gcc'>gcc (2)</a></li><li><a href='/blog/categories/getopt'>getopt (1)</a></li><li><a href='/blog/categories/gettext'>gettext (2)</a></li><li><a href='/blog/categories/git'>git (5)</a></li><li><a href='/blog/categories/github-flavored-markdown'>github flavored markdown (1)</a></li><li><a href='/blog/categories/github-pages'>github pages (1)</a></li><li><a href='/blog/categories/gnu'>gnu (1)</a></li><li><a href='/blog/categories/gnu-as'>gnu as (1)</a></li><li><a href='/blog/categories/got'>got (1)</a></li><li><a href='/blog/categories/gpl'>gpl (1)</a></li><li><a href='/blog/categories/gstreamer'>gstreamer (1)</a></li><li><a href='/blog/categories/hole'>hole (1)</a></li><li><a href='/blog/categories/inline'>inline (1)</a></li><li><a href='/blog/categories/javadoc'>javadoc (1)</a></li><li><a href='/blog/categories/javadoc'>javadoc, (1)</a></li><li><a href='/blog/categories/ld'>ld (1)</a></li><li><a href='/blog/categories/libtool'>libtool (2)</a></li><li><a href='/blog/categories/linker'>linker (1)</a></li><li><a href='/blog/categories/linker-script'>linker script (5)</a></li><li><a href='/blog/categories/linux'>linux (40)</a></li><li><a href='/blog/categories/linux-utilities'>linux_utilities (2)</a></li><li><a href='/blog/categories/live-cd'>live cd (1)</a></li><li><a href='/blog/categories/lseek'>lseek (1)</a></li><li><a href='/blog/categories/macro'>macro (1)</a></li><li><a href='/blog/categories/make'>make (6)</a></li><li><a href='/blog/categories/markdown'>markdown (2)</a></li><li><a href='/blog/categories/octopress'>octopress (8)</a></li><li><a href='/blog/categories/osm'>osm (1)</a></li><li><a href='/blog/categories/patch'>patch (1)</a></li><li><a href='/blog/categories/pbuilder'>pbuilder (2)</a></li><li><a href='/blog/categories/pomodoro-technique'>pomodoro_technique (1)</a></li><li><a href='/blog/categories/presentation'>presentation (14)</a></li><li><a href='/blog/categories/python'>python (3)</a></li><li><a href='/blog/categories/qemu'>qemu (1)</a></li><li><a href='/blog/categories/quilt'>quilt (1)</a></li><li><a href='/blog/categories/regex'>regex (1)</a></li><li><a href='/blog/categories/rtenv'>rtenv (1)</a></li><li><a href='/blog/categories/rtos'>rtos (1)</a></li><li><a href='/blog/categories/shell-script'>shell_script (2)</a></li><li><a href='/blog/categories/software-development'>software_development (1)</a></li><li><a href='/blog/categories/stm32'>stm32 (2)</a></li><li><a href='/blog/categories/stm32f4'>stm32f4 (1)</a></li><li><a href='/blog/categories/strip'>strip (1)</a></li><li><a href='/blog/categories/ubuntu'>ubuntu (1)</a></li><li><a href='/blog/categories/upnp'>upnp (1)</a></li><li><a href='/blog/categories/usb'>usb (1)</a></li><li><a href='/blog/categories/valgrind'>valgrind (2)</a></li><li><a href='/blog/categories/vim'>vim (2)</a></li><li><a href='/blog/categories/virtualbox'>virtualbox (2)</a></li><li><a href='/blog/categories/wireless'>wireless (1)</a></li><li><a href='/blog/categories/wpa-supplicant'>wpa_supplicant (1)</a></li><li><a href='/blog/categories/tai-wan-xiao-chi'>台灣小吃 (1)</a></li><li><a href='/blog/categories/gan-xiang'>感想 (8)</a></li><li><a href='/blog/categories/kuang-rou'>爌肉 (1)</a></li><li><a href='/blog/categories/bi-ji'>筆記 (2)</a></li><li><a href='/blog/categories/zu-zhuang'>組裝 (2)</a></li><li><a href='/blog/categories/lao-jian-zhu'>老建築 (3)</a></li></ul>
+</section>
+<section>
+  <h1>Category Cloud</h1>
+    <span id="tag-cloud"><a href='/blog/categories/arm' style='font-size: 110.5%'>arm(7)</a> <a href='/blog/categories/asm' style='font-size: 101.5%'>asm(1)</a> <a href='/blog/categories/assembler' style='font-size: 103.0%'>assembler(2)</a> <a href='/blog/categories/assembly' style='font-size: 104.5%'>assembly(3)</a> <a href='/blog/categories/autotools' style='font-size: 106.0%'>autotools(4)</a> <a href='/blog/categories/banana-pi' style='font-size: 101.5%'>banana pi(1)</a> <a href='/blog/categories/bash' style='font-size: 101.5%'>bash(1)</a> <a href='/blog/categories/bintuils' style='font-size: 104.5%'>bintuils(3)</a> <a href='/blog/categories/binutil' style='font-size: 101.5%'>binutil(1)</a> <a href='/blog/categories/binutils' style='font-size: 115.0%'>binutils(10)</a> <a href='/blog/categories/c' style='font-size: 139.0%'>c(26)</a> <a href='/blog/categories/c99' style='font-size: 101.5%'>c99(1)</a> <a href='/blog/categories/c-preprocessor' style='font-size: 101.5%'>c_preprocessor(1)</a> <a href='/blog/categories/cmake' style='font-size: 103.0%'>cmake(2)</a> <a href='/blog/categories/dbdoclet' style='font-size: 101.5%'>dbdoclet(1)</a> <a href='/blog/categories/debian' style='font-size: 124.0%'>debian(16)</a> <a href='/blog/categories/debootstrap' style='font-size: 101.5%'>debootstrap(1)</a> <a href='/blog/categories/doxygen' style='font-size: 101.5%'>doxygen(1)</a> <a href='/blog/categories/f9' style='font-size: 101.5%'>f9(1)</a> <a href='/blog/categories/free-software' style='font-size: 101.5%'>free_software(1)</a> <a href='/blog/categories/freertos' style='font-size: 101.5%'>freertos(1)</a> <a href='/blog/categories/fsf' style='font-size: 101.5%'>fsf(1)</a> <a href='/blog/categories/gcc' style='font-size: 103.0%'>gcc(2)</a> <a href='/blog/categories/getopt' style='font-size: 101.5%'>getopt(1)</a> <a href='/blog/categories/gettext' style='font-size: 103.0%'>gettext(2)</a> <a href='/blog/categories/git' style='font-size: 107.5%'>git(5)</a> <a href='/blog/categories/github-flavored-markdown' style='font-size: 101.5%'>github flavored markdown(1)</a> <a href='/blog/categories/github-pages' style='font-size: 101.5%'>github pages(1)</a> <a href='/blog/categories/gnu' style='font-size: 101.5%'>gnu(1)</a> <a href='/blog/categories/gnu-as' style='font-size: 101.5%'>gnu as(1)</a> <a href='/blog/categories/got' style='font-size: 101.5%'>got(1)</a> <a href='/blog/categories/gpl' style='font-size: 101.5%'>gpl(1)</a> <a href='/blog/categories/gstreamer' style='font-size: 101.5%'>gstreamer(1)</a> <a href='/blog/categories/hole' style='font-size: 101.5%'>hole(1)</a> <a href='/blog/categories/inline' style='font-size: 101.5%'>inline(1)</a> <a href='/blog/categories/javadoc' style='font-size: 101.5%'>javadoc(1)</a> <a href='/blog/categories/javadoc' style='font-size: 101.5%'>javadoc,(1)</a> <a href='/blog/categories/ld' style='font-size: 101.5%'>ld(1)</a> <a href='/blog/categories/libtool' style='font-size: 103.0%'>libtool(2)</a> <a href='/blog/categories/linker' style='font-size: 101.5%'>linker(1)</a> <a href='/blog/categories/linker-script' style='font-size: 107.5%'>linker script(5)</a> <a href='/blog/categories/linux' style='font-size: 160.0%'>linux(40)</a> <a href='/blog/categories/linux-utilities' style='font-size: 103.0%'>linux_utilities(2)</a> <a href='/blog/categories/live-cd' style='font-size: 101.5%'>live cd(1)</a> <a href='/blog/categories/lseek' style='font-size: 101.5%'>lseek(1)</a> <a href='/blog/categories/macro' style='font-size: 101.5%'>macro(1)</a> <a href='/blog/categories/make' style='font-size: 109.0%'>make(6)</a> <a href='/blog/categories/markdown' style='font-size: 103.0%'>markdown(2)</a> <a href='/blog/categories/octopress' style='font-size: 112.0%'>octopress(8)</a> <a href='/blog/categories/osm' style='font-size: 101.5%'>osm(1)</a> <a href='/blog/categories/patch' style='font-size: 101.5%'>patch(1)</a> <a href='/blog/categories/pbuilder' style='font-size: 103.0%'>pbuilder(2)</a> <a href='/blog/categories/pomodoro-technique' style='font-size: 101.5%'>pomodoro_technique(1)</a> <a href='/blog/categories/presentation' style='font-size: 121.0%'>presentation(14)</a> <a href='/blog/categories/python' style='font-size: 104.5%'>python(3)</a> <a href='/blog/categories/qemu' style='font-size: 101.5%'>qemu(1)</a> <a href='/blog/categories/quilt' style='font-size: 101.5%'>quilt(1)</a> <a href='/blog/categories/regex' style='font-size: 101.5%'>regex(1)</a> <a href='/blog/categories/rtenv' style='font-size: 101.5%'>rtenv(1)</a> <a href='/blog/categories/rtos' style='font-size: 101.5%'>rtos(1)</a> <a href='/blog/categories/shell-script' style='font-size: 103.0%'>shell_script(2)</a> <a href='/blog/categories/software-development' style='font-size: 101.5%'>software_development(1)</a> <a href='/blog/categories/stm32' style='font-size: 103.0%'>stm32(2)</a> <a href='/blog/categories/stm32f4' style='font-size: 101.5%'>stm32f4(1)</a> <a href='/blog/categories/strip' style='font-size: 101.5%'>strip(1)</a> <a href='/blog/categories/ubuntu' style='font-size: 101.5%'>ubuntu(1)</a> <a href='/blog/categories/upnp' style='font-size: 101.5%'>upnp(1)</a> <a href='/blog/categories/usb' style='font-size: 101.5%'>usb(1)</a> <a href='/blog/categories/valgrind' style='font-size: 103.0%'>valgrind(2)</a> <a href='/blog/categories/vim' style='font-size: 103.0%'>vim(2)</a> <a href='/blog/categories/virtualbox' style='font-size: 103.0%'>virtualbox(2)</a> <a href='/blog/categories/wireless' style='font-size: 101.5%'>wireless(1)</a> <a href='/blog/categories/wpa-supplicant' style='font-size: 101.5%'>wpa_supplicant(1)</a> <a href='/blog/categories/tai-wan-xiao-chi' style='font-size: 101.5%'>台灣小吃(1)</a> <a href='/blog/categories/gan-xiang' style='font-size: 112.0%'>感想(8)</a> <a href='/blog/categories/kuang-rou' style='font-size: 101.5%'>爌肉(1)</a> <a href='/blog/categories/bi-ji' style='font-size: 103.0%'>筆記(2)</a> <a href='/blog/categories/zu-zhuang' style='font-size: 103.0%'>組裝(2)</a> <a href='/blog/categories/lao-jian-zhu' style='font-size: 104.5%'>老建築(3)</a> </span>
+</section>
+
+
+
+
+  
+</aside>
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+<a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/">Creative Commons Attribution-NonCommercial 4.0 International License</a>.<br>
+  Copyright &copy; 2016 - Wen Liao -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'httpwen00072githubio';
+      
+        
+        var disqus_script = 'count.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = '//' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,957 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: C | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/c/atom.xml" rel="self"/>
+  <link href="http://wen00072.github.io/"/>
+  <updated>2016-07-25T12:05:47+08:00</updated>
+  <id>http://wen00072.github.io/</id>
+  <author>
+    <name><![CDATA[Wen Liao]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[談談strip]]></title>
+    <link href="http://wen00072.github.io/blog/2015/11/16/tan-tan-strip/"/>
+    <updated>2015-11-16T21:32:23+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/11/16/tan-tan-strip</id>
+    <content type="html"><![CDATA[<p>Strip，顧名思義，就是脫脫。有興趣的紳士可以估狗strip club。那麼在Linux的binutil中strip是要脫什麼呢？先來問一下男人</p>
+
+<pre><code class="text man strip">STRIP(1)                                    GNU Development Tools                                    STRIP(1)
+
+NAME
+       strip - Discard symbols from object files.
+...
+</code></pre>
+
+<p>用中文說，就是從object 檔中把symbol丟掉。讓我們做幾個小實驗吧。</p>
+
+<ul>
+<li><a href="#strip_test1">測試一：Strip 執行檔</a></li>
+<li><a href="#strip_test2">測試二：Strip Object檔</a></li>
+<li><a href="#strip_test3">測試三：Strip debug 資訊</a></li>
+<li><a href="#strip_test4">測試四：Strip shared library</a></li>
+</ul>
+
+
+<h2>測試環境</h2>
+
+<pre><code class="text">$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.3 LTS
+Release:    14.04
+Codename:   trusty
+</code></pre>
+
+<h2>測試程式</h2>
+
+<pre><code class="c main_test.c">#include &lt;stdio.h&gt;
+extern test();
+
+int main(void)
+{
+    test();
+
+    return 0;
+}
+</code></pre>
+
+<pre><code class="c test.c">#include &lt;stdio.h&gt;
+
+char *g_myStr = "Wen";
+static char *gp_myStr = "Liao";
+
+static void s_test(void)
+{
+    printf("%s %s\n", g_myStr, gp_myStr);
+}
+
+
+void test(void)
+{
+    printf("Hello ");
+    s_test();
+}
+</code></pre>
+
+<pre><code class="Makefile Makefile">TARGET=test
+SRCS=test.c main_test.c
+OBJS=$(patsubst  %.c, %.o, $(SRCS))
+CFLAGS=-g
+
+$(TARGET): $(OBJS)
+    $(CC) $(CFLAGS) $^ -o $@
+
+clean:
+    rm -rf $(TARGET) $(OBJS)
+</code></pre>
+
+<p><a name="strip_test1"></a></p>
+
+<h2>測試一：Strip 執行檔</h2>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ ./test 
+Hello Wen Liao
+
+$ ls test -gG
+-rwxrwxr-x 1 10217 Nov 16 22:33 test
+</code></pre>
+
+<p>可以看到產生出來的執行檔有<code>10217</code> bytes。我們進一步來看執行檔的symbol。</p>
+
+<pre><code class="text">$ nm test
+0000000000601050 B __bss_start
+...
+0000000000601040 D g_myStr
+00000000004003e0 T _init
+...
+0000000000601048 d gp_myStr
+...
+000000000040056d T main
+                 U printf@@GLIBC_2.2.5
+...
+000000000040052d t s_test
+0000000000400553 T test
+0000000000601050 D __TMC_END__
+</code></pre>
+
+<p>那麼來看看strip後的檔案size和symbol吧。你可以看到size變小而且symbol不見了。另外上面可以比對一下<code>t</code>、<code>T</code>、<code>d</code>、<code>D</code>和<code>s_test</code>、<code>test</code>、<code>gp_myStr</code>、<code>g_myStr</code>的關係。</p>
+
+<pre><code class="text">$ strip test
+
+$ ./test 
+Hello Wen Liao
+
+$ nm test
+nm: test: no symbols
+
+$ ls -gG test
+-rwxrwxr-x 1 6296 Nov 16 22:36 test
+</code></pre>
+
+<p><a name="strip_test2"></a></p>
+
+<h2>測試二：Strip Object檔</h2>
+
+<p>因為strip就是把object file (執行檔也是一種object file)的symbol拿掉，所以在link time需要symbol時如果該object檔案被strip過，就會發生錯誤。範例如下：</p>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ nm -a test.o 
+0000000000000000 b .bss
+0000000000000000 n .comment
+0000000000000000 d .data
+0000000000000000 N .debug_abbrev
+0000000000000000 N .debug_aranges
+0000000000000000 N .debug_info
+0000000000000000 N .debug_line
+0000000000000000 N .debug_str
+0000000000000000 r .eh_frame
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+0000000000000000 n .note.GNU-stack
+                 U printf
+0000000000000000 r .rodata
+0000000000000000 t s_test
+0000000000000026 T test
+0000000000000000 a test.c
+0000000000000000 t .text
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ strip test.o 
+
+$ ls -gG test.o
+-rw-rw-r-- 1 952 Nov 16 23:03 test.o
+
+$ nm test.o
+nm: test.o: no symbols
+
+$ make
+cc -g test.o main_test.o -o test
+/usr/bin/ld: error in test.o(.eh_frame); no .eh_frame_hdr table will be created.
+main_test.o: In function `main':
+/home/wen/tmp/sandbox/main_test.c:6: undefined reference to `test'
+collect2: error: ld returned 1 exit status
+make: *** [test] Error 1
+</code></pre>
+
+<p>這邊我<code>nm</code>下了<code>-a</code>參數，這會顯示出<strong>所有的symbol</strong>，預設的<code>nm</code>輸出如下提供比較。</p>
+
+<pre><code class="text">$ nm test.o 
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+                 U printf
+0000000000000000 t s_test
+0000000000000026 T test
+</code></pre>
+
+<p><a name="strip_test3"></a></p>
+
+<h2>測試三：Strip debug 資訊</h2>
+
+<p>其實只是單純要介紹<code>-d</code>參數而已</p>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ strip -d test.o
+
+$ nm -a test.o
+0000000000000000 b .bss
+0000000000000000 n .comment
+0000000000000000 d .data
+0000000000000000 r .eh_frame
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+0000000000000000 n .note.GNU-stack
+                 U printf
+0000000000000000 r .rodata
+0000000000000000 t s_test
+0000000000000026 T test
+0000000000000000 t .text
+
+$ make
+cc -g test.o main_test.o -o test
+
+$ ./test
+Hello Wen Liao
+
+$ ls -gG test test.o
+-rwxrwxr-x 1 9737 Nov 16 23:01 test
+-rw-rw-r-- 1 1896 Nov 16 23:01 test.o
+</code></pre>
+
+<p><a name="strip_test4"></a></p>
+
+<h2>測試四：Strip shared library</h2>
+
+<p>這邊要幹的第一件事是修改Makefile如下。主要是把test.o包裝成shared library，這個Makefile很醜，我知道。</p>
+
+<pre><code class="Makefile Makefile">TARGET=test
+SRC=main_test.c
+OBJ=$(patsubst  %.c, %.o, $(SRC))
+
+LIB_SRC=test.c
+LIB_OBJ=$(patsubst  %.c, %.o, $(LIB_SRC))
+LIB_NAME=test
+LIB=lib$(LIB_NAME).so
+CFLAGS=-g
+
+$(TARGET): $(OBJ) $(LIB)
+    $(CC) $(CFLAGS) $&lt; -o $@ -L./ -l$(LIB_NAME)
+
+$(LIB): $(LIB_OBJ)
+    $(CC) -shared -Wl,-soname,$(LIB).0 $^ -o $@
+    rm $(LIB).0 &amp;&amp; ln -sf $(LIB) $(LIB).0
+
+$(LIB_OBJ): $(LIB_SRC)
+    $(CC) $(CFLAGS) -c -fPIC $^
+
+clean:
+    rm -rf $(TARGET) $(OBJ) $(LIB_OBJ)
+</code></pre>
+
+<p>自幹shared library執行程式的時候不要忘記加上<code>LD_LIBRARY_PATH</code>環境變數：
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make clean
+</span><span class='line'>rm -rf test  main_test.o  test.o&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ make
+</span><span class='line'>cc -g   -c -o main_test.o main_test.c
+</span><span class='line'>cc -g -c -fPIC test.c
+</span><span class='line'>cc -shared -Wl,-soname,libtest.so.0 test.o -o libtest.so
+</span><span class='line'>rm libtest.so.0 &amp;amp;&amp;amp; ln -sf libtest.so libtest.so.0
+</span><span class='line'>cc -g main_test.o -o test -L./ -ltest&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ LD_LIBRARY_PATH=&lt;code&gt;pwd&lt;/code&gt; ./test
+</span><span class='line'>Hello Wen Liao
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>現在來比較strip前後的shared library 差異吧。
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ nm -a libtest.so
+</span><span class='line'>0000000000000000 a
+</span><span class='line'>0000000000201048 b .bss
+</span><span class='line'>0000000000201048 B &lt;strong&gt;bss_start
+</span><span class='line'>0000000000000000 n .comment
+</span><span class='line'>0000000000201048 b completed.6973
+</span><span class='line'>0000000000000000 a crtstuff.c
+</span><span class='line'>0000000000000000 a crtstuff.c
+</span><span class='line'>                 w &lt;/strong&gt;cxa_finalize@@GLIBC_2.2.5
+</span><span class='line'>0000000000201030 d .data
+</span><span class='line'>0000000000000000 N .debug_abbrev
+</span><span class='line'>0000000000000000 N .debug_aranges
+</span><span class='line'>0000000000000000 N .debug_info
+</span><span class='line'>0000000000000000 N .debug_line
+</span><span class='line'>0000000000000000 N .debug_str
+</span><span class='line'>0000000000000650 t deregister_tm_clones
+</span><span class='line'>00000000000006c0 t &lt;strong&gt;do_global_dtors_aux
+</span><span class='line'>0000000000200df0 t &lt;/strong&gt;do_global_dtors_aux_fini_array_entry
+</span><span class='line'>0000000000201030 d &lt;strong&gt;dso_handle
+</span><span class='line'>0000000000200e00 d .dynamic
+</span><span class='line'>0000000000200e00 d &lt;em&gt;DYNAMIC
+</span><span class='line'>0000000000000398 r .dynstr
+</span><span class='line'>0000000000000230 r .dynsym
+</span><span class='line'>0000000000201048 D &lt;/em&gt;edata
+</span><span class='line'>00000000000007c0 r .eh_frame
+</span><span class='line'>000000000000079c r .eh_frame_hdr
+</span><span class='line'>0000000000201050 B &lt;em&gt;end
+</span><span class='line'>000000000000077c T &lt;/em&gt;fini
+</span><span class='line'>000000000000077c t .fini
+</span><span class='line'>0000000000200df0 t .fini_array
+</span><span class='line'>0000000000000700 t frame_dummy
+</span><span class='line'>0000000000200de8 t &lt;/strong&gt;frame_dummy_init_array_entry
+</span><span class='line'>0000000000000840 r &lt;strong&gt;FRAME_END&lt;/strong&gt;
+</span><span class='line'>0000000000201000 d &lt;em&gt;GLOBAL_OFFSET_TABLE&lt;/em&gt;
+</span><span class='line'>                 w &lt;strong&gt;gmon_start&lt;/strong&gt;
+</span><span class='line'>0000000000201038 D g_myStr
+</span><span class='line'>00000000000001f0 r .gnu.hash
+</span><span class='line'>000000000000045c r .gnu.version
+</span><span class='line'>0000000000000480 r .gnu.version_r
+</span><span class='line'>0000000000200fd0 d .got
+</span><span class='line'>0000000000201000 d .got.plt
+</span><span class='line'>0000000000201040 d gp_myStr
+</span><span class='line'>00000000000005f0 T &lt;em&gt;init
+</span><span class='line'>00000000000005f0 t .init
+</span><span class='line'>0000000000200de8 t .init_array
+</span><span class='line'>                 w &lt;/em&gt;ITM_deregisterTMCloneTable
+</span><span class='line'>                 w &lt;em&gt;ITM_registerTMCloneTable
+</span><span class='line'>0000000000200df8 d .jcr
+</span><span class='line'>0000000000200df8 d &lt;strong&gt;JCR_END&lt;/strong&gt;
+</span><span class='line'>0000000000200df8 d &lt;strong&gt;JCR_LIST&lt;/strong&gt;
+</span><span class='line'>                 w &lt;/em&gt;Jv_RegisterClasses
+</span><span class='line'>00000000000001c8 r .note.gnu.build-id
+</span><span class='line'>0000000000000610 t .plt
+</span><span class='line'>                 U printf@@GLIBC_2.2.5
+</span><span class='line'>0000000000000680 t register_tm_clones
+</span><span class='line'>00000000000004a0 r .rela.dyn
+</span><span class='line'>00000000000005a8 r .rela.plt
+</span><span class='line'>0000000000000785 r .rodata
+</span><span class='line'>0000000000000735 t s_test
+</span><span class='line'>0000000000000760 T test
+</span><span class='line'>0000000000000000 a test.c
+</span><span class='line'>0000000000000650 t .text
+</span><span class='line'>0000000000201048 d &lt;strong&gt;TMC_END&lt;/strong&gt;&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ ls -gG libtest.so
+</span><span class='line'>-rwxrwxr-x 1 9275 Nov 16 23:47 libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ strip libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ ls -gG libtest.so
+</span><span class='line'>-rwxrwxr-x 1 6104 Nov 16 23:47 libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ nm -a libtest.so
+</span><span class='line'>nm: libtest.so: no symbols&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ LD_LIBRARY_PATH=&lt;code&gt;pwd&lt;/code&gt; ./test
+</span><span class='line'>Hello Wen Liao
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>這邊變成有新的作業，dynamic link的時候沒有shared library沒有symbol怎麼拿到function address和全域變數？下次有看到再來解釋吧。</p>
+
+<h2>補充</h2>
+
+<p>如果編譯的程式碼有加入debug資訊，objdump在反組譯的時候可以加入<code>-S</code>參數比對原始碼對應的機械碼，對於想要研究系統細節的人應該有所幫助。簡單範例如下</p>
+
+<pre><code class="text"> x$ make clean
+rm -rf test  test.o  main_test.o
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ objdump -S -d test
+
+test:     file format elf64-x86-64
+
+
+Disassembly of section .init:
+
+00000000004003e0 &lt;_init&gt;:
+  4003e0:   48 83 ec 08             sub    $0x8,%rsp
+...
+
+0000000000400553 &lt;test&gt;:
+
+
+void test(void)
+{
+  400553:   55                      push   %rbp
+  400554:   48 89 e5                mov    %rsp,%rbp
+    printf("Hello ");
+  400557:   bf 24 06 40 00          mov    $0x400624,%edi
+  40055c:   b8 00 00 00 00          mov    $0x0,%eax
+  400561:   e8 aa fe ff ff          callq  400410 &lt;printf@plt&gt;
+    s_test();
+  400566:   e8 c2 ff ff ff          callq  40052d &lt;s_test&gt;
+}
+  40056b:   5d                      pop    %rbp
+  40056c:   c3                      retq   
+
+...
+</code></pre>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>Binary Hacks：駭客秘傳技巧一百招</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[C 語言的潛規則型態轉換]]></title>
+    <link href="http://wen00072.github.io/blog/2015/05/08/conversion-in-c/"/>
+    <updated>2015-05-08T23:37:45+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/05/08/conversion-in-c</id>
+    <content type="html"><![CDATA[<p>同樣是看過<a href="http://knking.com/books/c2/index.html">C Programming: A Modern Approach</a>的筆記整理。一樣，寫的時候手上沒書，請自行斟酌，盡信書不如無書，更何況是組裝工亂寫的東西呢。</p>
+
+<p>一般來說，變數型態可以強制轉換，這學過C 語言應該都知道。不過看了書上才發現不只強制轉換，compiler也會幫你的程式碼加料、做型態轉換。更恐怖的是，沒注意到的話，會發生慘劇。</p>
+
+<p>本文開始之前，先定義專有名詞：</p>
+
+<ul>
+<li>promotion
+
+<ul>
+<li>當然不是升官還是促銷。而是把變數的型態升級，如short int -> int。為什麼要這樣幹呢？因為expression裏面變數不只一個，做運算的時候需要把某些變數升級，以免計算結果超過預期。諷刺的是，因為這樣的方式，也可能讓你的程式行為和你預期的不同。</li>
+</ul>
+</li>
+</ul>
+
+
+<p>書中提到潛規則型態轉換發生的時機如下</p>
+
+<ul>
+<li>expression中變數型態不同</li>
+<li>assign的left value和right value型態不同</li>
+<li>函數中的參數變數型態和函數內部使用該變數時的型態不同</li>
+<li>函數的回傳值和宣告的不同</li>
+</ul>
+
+
+<p>後面兩種大概就是下面這樣的情況吧</p>
+
+<pre><code class="c ">long test(int i)
+{
+    i = 0.5f;
+
+    return i;
+}
+</code></pre>
+
+<p>書中用下面的方式分類C 語言的潛規則型態轉換規則，分別整理如下，偷懶不講C99了。</p>
+
+<h2>assignment</h2>
+
+<p>這個最簡單，等號左邊用啥型態右邊就得轉成這樣的型態。這也是為何</p>
+
+<pre><code class="c">    int i = 11.039;
+    printf("%d", i);
+</code></pre>
+
+<p>結果會是11的原因。</p>
+
+<h2>expression</h2>
+
+<p>一樣這是compiler的術語。此這邊就是一堆的歡樂的型態排列組合，C99還有<code>_Complex</code>和<code>_Bool</code>參戰。</p>
+
+<p>一樣先分類</p>
+
+<ul>
+<li>expression中的變數只有小數點那種型態，依下面順序promote: <code>float</code> -> <code>double</code> -> <code>long double</code></li>
+<li>expression中的變數只有整數，就變成
+
+<ul>
+<li>promote時要判斷使用<code>unsigned</code> 還是<code>signed</code>整數依照下面的順序promote:
+
+<ul>
+<li>&hellip; <code>int</code> -> <code>unsigned int</code> -> <code>long int</code> -> <code>unsigned long int</code> &hellip;</li>
+</ul>
+</li>
+<li>這種情況沒注意的話，可能就會出現下面的悲劇</li>
+</ul>
+</li>
+</ul>
+
+
+<pre><code class="c implicit.c">#include &lt;stdio.h&gt;
+void implicit_conv()
+{
+    int i = -1;
+    unsigned int j = 100;
+
+    if (i &lt; j) {
+        printf("expected\n"); 
+    }
+    else {
+        printf("GG\n");     
+    }
+}
+
+int main(int argc, char **argv)
+{
+    implicit_conv();
+
+    return 0;
+}
+</code></pre>
+
+<p>執行結果如下
+&#8220;`text
+$ make implicit
+cc     implicit.c   -o implicit</p>
+
+<p>$ ./implicit
+GG
+<code>``
+為何會GG呢，因為</code>i &lt; j<code>是一個**expression**，照上面的規矩，expression同時有</code>int<code>和</code>unsigned int<code>的話，</code>int<code>會被promote的</code>unsigned int<code>，</code>-1`的二進位不知道的人，可能要先搞懂再來學C吧？</p>
+
+<p>如果你擔心程式有類似的問題，可以把<code>gcc</code>最囉唆的檢查打開，就會噴出錯誤如下</p>
+
+<pre><code class="text">$ make implicit CFLAGS="-Wall -Wextra -Werror"
+cc -Wall -Wextra -Werror   -c -o implicit.o implicit.c
+implicit.c: In function ‘implicit_conv’:
+implicit.c:7:11: error: comparison between signed and unsigned integer expressions [-Werror=sign-compare]
+     if (i &lt; j) {
+           ^
+implicit.c: In function ‘main’:
+implicit.c:15:14: error: unused parameter ‘argc’ [-Werror=unused-parameter]
+ int main(int argc, char **argv)
+              ^
+implicit.c:15:27: error: unused parameter ‘argv’ [-Werror=unused-parameter]
+ int main(int argc, char **argv)
+                           ^
+cc1: all warnings being treated as errors
+make: *** [implicit.o] Error 1
+</code></pre>
+
+<p>你可能會問，那有小數點的型態和整數型態亂戰會怎樣呢？自己估狗或看書吧。</p>
+
+<h2>題外話</h2>
+
+<h3>題外話一</h3>
+
+<p>由於這些潛規則，在轉換型態的時候，可以看到這樣的statement。</p>
+
+<pre><code class="c">double whatsoever;
+whatsoever = (double) 10 / 3;
+</code></pre>
+
+<p>為什麼<code>3</code>不用型態轉換呢？你必須要比對C語言的<a href="http://en.wikipedia.org/wiki/Operators_in_C_and_C%2B%2B#Operator_precedence">Operator precedence</a>，也就是運算元處理順序。可以知道C 語法會處理順序如下</p>
+
+<ul>
+<li><code>10</code> cast成<code>double</code>型態</li>
+<li>因為潛規則，<code>3</code>也會被promote成<code>doule</code></li>
+<li>計算<code>10 / 3</code></li>
+<li>將結果assign給 <code>=</code> 左邊的變數</li>
+</ul>
+
+
+<h3>題外話二</h3>
+
+<p>在C語言中有小數點的常數預設型態可是<code>double</code>唷。所以你如果有<code>float</code>最好使用下面的方式轉換型態。至於為什麼會規定是<code>double</code>呢？書中有講八卦，就不破梗了。</p>
+
+<pre><code class="c">float whatsoever = 3.14f;
+</code></pre>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[C 語言的format String]]></title>
+    <link href="http://wen00072.github.io/blog/2015/05/06/format-string-in-c/"/>
+    <updated>2015-05-06T22:34:43+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/05/06/format-string-in-c</id>
+    <content type="html"><![CDATA[<p>format string也是看過<a href="http://knking.com/books/c2/index.html">C Programming: A Modern Approach</a>才注意的。寫文的當下沒帶這本書，問男人好了。</p>
+
+<pre><code>$ man 3 printf
+</code></pre>
+
+<p>簡單來說，format string是由</p>
+
+<ul>
+<li>普通文字，不包含單獨的<code>%</code>字元</li>
+<li>conversion specifications，就是你看到的<code>%s</code>之類的的東西</li>
+<li>每個conversion specifier有對應的參數</li>
+</ul>
+
+
+<p>整理conversion specifier如下</p>
+
+<ul>
+<li>結構
+
+<ul>
+<li>以<code>%</code>開頭</li>
+<li>以conversion specifier 結尾</li>
+<li>中間有些<del>特異功能</del>optional的描述如
+
+<ul>
+<li><a href="#fs_fl">Flags</a></li>
+<li><a href="#fs_wd">最少欄位寬度規範</a></li>
+<li><a href="#fs_prec">精確度描述</a></li>
+<li><a href="#fs_sz">變數size輔助描述</a></li>
+</ul>
+</li>
+<li><code>Conversion specifier</code>結尾，就是我們看過的<code>d</code>, <code>f</code> 等</li>
+</ul>
+</li>
+</ul>
+
+
+<p>示意如下</p>
+
+<ul>
+<li><code>%</code>[<font color="red">Flag</font>][<font color="green">最少欄位寬度規範</font>][<font color="red">精確度描述</font>][<font color="green">變數size描述</font>]<code>Conversion specifier</code></li>
+</ul>
+
+
+<p>接下來依上面的部份說明如下</p>
+
+<p><a name="fs_fl"></a></p>
+
+<h2>Flags</h2>
+
+<ul>
+<li><code>#</code>
+
+<ul>
+<li>自動對指定的數字進位數（八進位、十進位、十六進位等）加上合適的prefix如<code>0x</code>, <code>0</code>等。</li>
+</ul>
+</li>
+<li><code>0</code>
+
+<ul>
+<li>填入<code>0</code>作為pad。pad是啥呢？中文意思是填充物，自己體會吧。</li>
+</ul>
+</li>
+<li><code>-</code>
+
+<ul>
+<li>預設format string是靠右對齊，用了這個會變成靠左對齊。和樓上<code>0</code>一起會不會數字多好幾倍如<code>432</code>變<code>4320000</code>？不會，兩個同時出現<code>0</code>會被省略。</li>
+</ul>
+</li>
+<li><code>+</code>
+
+<ul>
+<li>指定數字最前面要加正負號</li>
+</ul>
+</li>
+<li><code>' '</code>
+
+<ul>
+<li>如果有設定數字要先顯示正負號，會在前面多加一個空白</li>
+</ul>
+</li>
+</ul>
+
+
+<p>以上是C 語言規範的，不同編譯器有加碼，懶得寫，自己問男人吧。</p>
+
+<p><a name="fs_wd"></a></p>
+
+<h2>最少欄位寬度規範</h2>
+
+<p>一定要正整數，當印出的數字長度少於這邊指定的參數，會自動填空白或是0。印出超過這邊指定的寬度的話呢？超過就超過，不然要怎麼辦？</p>
+
+<p>另外預設是往右邊對齊，想要往左對齊，請參考<code>-</code> flag。</p>
+
+<p><a name="fs_prec"></a></p>
+
+<h2>精確度描述</h2>
+
+<p>以<code>.十進位數字表示</code>，不同的變數型態有不同的精確度定義。</p>
+
+<p>舉例來說</p>
+
+<ul>
+<li>整數，<strong>最少</strong>要出現的數字長度，少於這樣的數字，會直接在左邊或是基底符號（0, 0x)後面填零補完。</li>
+<li>實數，也就是有小數點的，就是小數點後面<strong>最多</strong>可以出現的數字長度，超過了就截掉。</li>
+</ul>
+
+
+<p><a name="fs_sz"></a></p>
+
+<h2>變數size輔助描述</h2>
+
+<p>一般來說，我們會知道<code>d</code>是整數，但是在C語言還是有<code>long int</code>，<code>long long int</code>這樣型態的整數，為了能夠更精確的顯示，format string提供了這樣的描述，讓你加在<code>Conversion specifier</code>，如</p>
+
+<ul>
+<li><code>l</code>: long</li>
+<li><code>h</code>: short</li>
+</ul>
+
+
+<p>詳細列表和排列組合請問男人。</p>
+
+<h2>其他</h2>
+
+<p>flag除了C規格定的以外，不同廠商有加料，一樣去問男人，不過要用這個的話要考慮porting的問題。</p>
+
+<p>除此之外，男人有列出所有的<code>Conversion specifier</code>，除了熟悉的<code>d</code>, <code>f</code>, <code>s</code>, <code>c</code>, <code>x</code>以外，我列幾個我感興趣的如下</p>
+
+<ul>
+<li><code>a</code>, <code>A</code>: C99專用，實數的十六進位表示法</li>
+<li><code>p</code>: void * 的位址</li>
+</ul>
+
+
+<h2>怪招</h2>
+
+<p>format string還有<code>*</code>和<code>%m$</code>這種鬼東西，目前搞不清楚為什麼要這樣幹。
+不過幾然花了時間搞懂，就整理一下</p>
+
+<ul>
+<li><code>*</code>指目前對應的參數的<strong>下一個</strong>參數</li>
+<li><code>%m$*n$</code>把第n個的參數和第m個顯示<strong>交換</strong></li>
+</ul>
+
+
+<p>不知道是什麼鬼對不對？我也是，所以寫了程式測試一下</p>
+
+<pre><code class="c test_format_string.c">#include &lt;stdio.h&gt;
+
+int main(int argc, char **argv)
+{
+    int i = 2;
+    int j = 3;
+    int k = 4;
+
+    printf("@@%*d\n", i, j);
+
+    /* print third argument then first argument */
+    printf("!!%3$*1$d, %1$*2$d\n", i, j, k);
+
+    return 0;
+}
+</code></pre>
+
+<p>看看輸出吧，一樣懶得寫Makefile</p>
+
+<pre><code class="text">$ make test_format_string
+cc     test_format_string.c   -o test_format_string
+
+$ ./test_format_string 
+@@ 3
+!! 4,   2
+</code></pre>
+
+<h2>結論</h2>
+
+<p>這篇文章文章我介紹了</p>
+
+<ul>
+<li>format string和他的語法簡單說明</li>
+<li>make 的implicit rule</li>
+<li>取得Linux 下執行程式結束回傳值</li>
+</ul>
+
+
+<h2>參考資料</h2>
+
+<ul>
+<li><code>man 3 printf</code></li>
+<li><a href="http://alvinalexander.com/programming/printf-format-cheat-sheet">A printf format reference page (cheat sheet)</a></li>
+<li><a href="http://www.cprogramming.com/tutorial/printf-format-strings.html">Printf Format Strings</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[C 語言的逗號]]></title>
+    <link href="http://wen00072.github.io/blog/2015/05/04/comma-in-c/"/>
+    <updated>2015-05-04T22:49:53+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/05/04/comma-in-c</id>
+    <content type="html"><![CDATA[<p>因為只能和 C語言裝熟，只好看書看能不能裝更熟點。感謝成大同學推荐的書本：<a href="http://knking.com/books/c2/index.html">C Programming: A Modern Approach</a>。今天看到逗號的用法，手癢來用一下。</p>
+
+<p>簡單來說，<code>,</code>就是把<a href="http://en.wikipedia.org/wiki/Expression_(computer_science)">expression</a>串在一起，然後回傳最後一個expression的值。注意的是expression是compiler專有名詞，自己看連結，不解釋。</p>
+
+<p>知道這個特性，當然來個小實驗。照慣例還是要講一下測試環境。</p>
+
+<pre><code>$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.2 LTS
+Release:    14.04
+Codename:   trusty
+</code></pre>
+
+<p>接下來寫個小程式：</p>
+
+<pre><code class="c comma.c">#include &lt;stdio.h&gt;
+int main(int argc, char **argv)
+{
+    int i = 0;
+    int j = 10;
+
+    return -1, i + j;
+}
+</code></pre>
+
+<p>程式太簡單，懶得寫Makefile，直接make：</p>
+
+<pre><code>$ make comma
+cc     comma.c   -o comma
+</code></pre>
+
+<p>接下來就是驗收</p>
+
+<pre><code>$ ./comma
+$ echo $?
+10
+</code></pre>
+
+<p>接下來要問問題時間</p>
+
+<ul>
+<li>為啥要這樣幹？</li>
+<li>這個要用在這什麼地方？</li>
+</ul>
+
+
+<p>先回答第一個問題，就是要把一堆expression擠到被認為是一個expression。有了這樣的想法後，很多語法會只有一個express，如<code>if</code>, <code>for</code>, <code>while</code>，這時候想要在裏面多做事想得不得了的時候就可以用<code>,</code>，不過和條件有關的情況下，記得注意僅回傳最後一個expression的特色。</p>
+
+<p>題外話，這個<code>,</code>目前我印象中除了變數宣告和<code>for</code>以外，只看過<a href="https://github.com/embedded2013/rtenv/blob/master/kernel.c#L365">一次</a>，那次看到讓我有點反應不過來，感覺單純只是想省掉<code>{}</code>而已。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Hello World]]></title>
+    <link href="http://wen00072.github.io/blog/2015/03/25/hello-world/"/>
+    <updated>2015-03-25T00:06:03+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/03/25/hello-world</id>
+    <content type="html"><![CDATA[<h2>hello.c</h2>
+
+<pre><code class="c hello.c">#incldue &lt;stdio.h&gt;
+int main(int argc, char **argv)
+{
+    printf("Hello World\n");
+
+    return 0;
+}
+</code></pre>
+]]></content>
+  </entry>
+  
+</feed>

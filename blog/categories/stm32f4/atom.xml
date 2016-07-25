@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Stm32f4 | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/stm32f4/atom.xml" rel="self"/>
+  <link href="http://wen00072.github.io/"/>
+  <updated>2016-07-25T12:05:47+08:00</updated>
+  <id>http://wen00072.github.io/</id>
+  <author>
+    <name><![CDATA[Wen Liao]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[ARM CM4 Pratice (0): Environment Setup]]></title>
+    <link href="http://wen00072.github.io/blog/2016/04/06/arm-cm4-pratice-0-environment-setup/"/>
+    <updated>2016-04-06T22:15:15+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/04/06/arm-cm4-pratice-0-environment-setup</id>
+    <content type="html"><![CDATA[<p>很久以前買了<a href="http://www.st.com/web/catalog/tools/FM116/SC959/SS1532/PF259090">STM32F4 Disco的開發版</a>（<a href="http://wiki.csie.ncku.edu.tw/embedded/STM32F429">繁體中文資訊</a>），最近開始想要學習ARM架構和硬體控制等技術。在設定目標，規劃進度前，一定要先把編譯和燒錄環境架設起來，整理如下：</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#cm4-0-env">安裝作業系統環境</a></li>
+<li><a href="#cm4-0-steps">安裝步驟</a>
+
+<ul>
+<li><a href="#cm4-0-steps-tl">安裝Toolchain</a></li>
+<li><a href="#cm4-0-steps-pkg-install">手動安裝燒錄和除錯工具</a>
+
+<ul>
+<li><a href="#cm4-0-steps-pkg-install-prepare">安裝需要套件</a></li>
+<li><a href="#cm4-0-steps-pkg-install-stlink">手動安裝st-link</a></li>
+<li><a href="#cm4-0-steps-pkg-install-openocd">手動安裝OpenOCD</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#cm4-0-test">驗證燒錄</a>
+
+<ul>
+<li><a href="#cm4-0-test-prepare">事前準備</a></li>
+<li><a href="#cm4-0-test-stflash">使用st-flash 開發版燒錄</a></li>
+<li><a href="#cm4-0-test-openocd">使用openocd 開發版燒錄</a></li>
+</ul>
+</li>
+<li><a href="#cm4-0-ref">參考資料</a></li>
+</ul>
+
+
+<p><a name="cm4-0-env"></a></p>
+
+<h2>安裝作業系統環境</h2>
+
+<pre><code>$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.4 LTS
+Release:    14.04
+Codename:   trusty
+</code></pre>
+
+<p><a name="cm4-0-steps"></a></p>
+
+<h2>安裝步驟</h2>
+
+<p>要開發非本機的平台，我們會需要安裝</p>
+
+<ul>
+<li>Toolchain：提供編譯，函數，分析binary等功能</li>
+<li>燒錄軟體</li>
+<li>除錯工具</li>
+</ul>
+
+
+<p>st-link和openocd同時有燒錄和開發版軟體除錯的功能，因此我們兩個都安裝。</p>
+
+<p><a name="cm4-0-steps-tl"></a></p>
+
+<h3>安裝Toolchain</h3>
+
+<p>網路上找到<a href="https://launchpad.net/gcc-arm-embedded">GCC ARM Embedded (ARM R和M系列使用 )</a>的PPA。簡單找一下網路，<strong><font color="red">沒有直接證據說這邊的PPA是由ARM官方維護</font></strong>。不過在<a href="http://yottadocs.mbed.com/#installing-on-linux">mbed(ARM 成立的IoT作業系統)網站裏面</a>的確有提到這個PPA，暫時當作間接證據。<strong><font color="red">目前我還沒有驗證這個Toolchain編譯出來的binary是否可以在開發版上正常動作</font></strong>。</p>
+
+<pre><code class="text 安裝Toolchain指令">sudo add-apt-repository ppa:team-gcc-arm-embedded/ppa
+sudo apt-get update
+sudo apt-get install gcc-arm-embedded
+</code></pre>
+
+<p><a name="cm4-0-steps-pkg-install"></a></p>
+
+<h3>手動安裝燒錄和除錯工具</h3>
+
+<p><a name="cm4-0-steps-pkg-install-prepare"></a></p>
+
+<h4>安裝需要套件</h4>
+
+<pre><code class="text 系統安裝設定STM32F4環境相關套件 ">sudo apt-get install git
+sudo apt-get install libtool
+sudo apt-get install automake
+sudo apt-get install autoconf
+sudo apt-get install pkg-config
+sudo apt-get install libusb-1.0-0-dev
+sudo apt-get install libftdi-dev   # 當openocd要支援MPSSE mode才需要裝，這是啥我不知道。
+sudo apt-get install libhidapi-dev # 當openocd要支援CMSIS-DAP才會用到，這是啥我不知道。
+</code></pre>
+
+<p>我自己的習慣是非必要不會放在系統中，<strong>接下來的指令都是預設<code>st-link</code>和<code>openocd</code>裝到<code>$HOME/bin</code>中</strong>，Ubuntu在登入時會自動將<code>~/bin</code>加入<code>PATH</code>中。</p>
+
+<p>如果您沒有~/bin的話，請使用下面指令建立。
+<code>
+mkdir ~/bin/
+. ~/.profile # 強迫系統自動將`~/bin`加入`PATH`中
+</code></p>
+
+<p><a name="cm4-0-steps-pkg-install-stlink"></a></p>
+
+<h4>手動安裝st-link</h4>
+
+<p>簡單講一下，就是下載、編譯、安裝軟體。特別要注意的是，為了要讓你的PC在使用Mini USB連到開發版後能夠讓Ubuntu的<code>udev</code>服務可以順利地偵測到開發版，需要加入相關設定並重新啟動<code>udev</code>服務。</p>
+
+<p>下載Source code
+<code>text 下載Source code  
+git clone https://github.com/texane/stlink
+</code></p>
+
+<p>編譯stlink
+<code>text 編譯
+cd stlink/
+./autogen.sh
+./configure
+make
+cp st-* ~/bin
+</code></p>
+
+<p>設定並重新起動udev
+<code>text 設定並重新起動udev
+sudo cp 49-stlinkv* /etc/udev/rules.d/ -rv
+sudo service udev restart
+</code></p>
+
+<p>驗證一下是否可以偵測到開發版，請確定測試前開發版已經和您的電腦透過Mini USB連線，以及有設定<code>udev</code>並且重新啟動。</p>
+
+<pre><code class="text   ">$ st-probe 
+Found 1 stlink programmers
+30303030303030303030303100
+     flash: 2097152 (pagesize: 16384)
+      sram: 262144
+    chipid: 0x0419
+     descr: F42x and F43x device
+</code></pre>
+
+<p><a name="cm4-0-steps-pkg-install-openocd"></a></p>
+
+<h4>手動安裝OpenOCD</h4>
+
+<p>下載Source code
+<code>text 下載Source code
+git clone git://git.code.sf.net/p/openocd/code openocd-code
+</code></p>
+
+<p>編譯
+<code>text 編譯
+cd openocd-code/
+./bootstrap
+./configure # script會自動偵測系統是否有相依開發套件
+make
+</code></p>
+
+<p>安裝
+<code>text 安裝
+cp src/openocd ~/bin
+cp tcl/board/stm32f429discovery.cfg ~/.openocd/openocd.cfg
+cp tcl/* ~/.openocd
+</code></p>
+
+<p>驗證一下是否可以偵測到開發版，請確定測試前開發版已經和您的電腦透過Mini USB連線。</p>
+
+<pre><code class="text">$ openocd 
+Open On-Chip Debugger 0.10.0-dev-00250-g9c37747 (2016-04-07-22:20)
+Licensed under GNU GPL v2
+For bug reports, read
+    http://openocd.org/doc/doxygen/bugs.html
+Info : The selected transport took over low-level target control. The results might differ compared to plain JTAG/SWD
+adapter speed: 2000 kHz
+adapter_nsrst_delay: 100
+none separate
+srst_only separate srst_nogate srst_open_drain connect_deassert_srst
+Info : Unable to match requested speed 2000 kHz, using 1800 kHz
+Info : Unable to match requested speed 2000 kHz, using 1800 kHz
+Info : clock speed 1800 kHz
+Info : STLINK v2 JTAG v17 API v2 SWIM v0 VID 0x0483 PID 0x3748
+Info : using stlink api v2
+Info : Target voltage: 2.862887
+Info : stm32f4x.cpu: hardware has 6 breakpoints, 4 watchpoints
+</code></pre>
+
+<p><a name="cm4-0-test"></a></p>
+
+<h2>驗證燒錄</h2>
+
+<p><a name="cm4-0-test-parepare"></a></p>
+
+<h3>事前準備</h3>
+
+<p>下載jserv整理的STM 軔體
+<code>
+git clone https://github.com/jserv/stm32f429-demos
+</code></p>
+
+<p>將source中的hex轉成binary
+<code>
+cd stm32f429-demos/
+make
+</code></p>
+
+<p>使用下載提供的Makefile燒錄，裏面會先用openocd燒錄，失敗的話自動切到st-flash燒錄，非常建議讀一下Makefile。
+<code>
+make flash-demo檔案
+</code></p>
+
+<p>目前套件內蒐集的demo檔案</p>
+
+<ul>
+<li>flash-GamesInJava</li>
+<li>flash-STM32F429I-DISCOVERY_Demo_V1.0.1</li>
+<li>flash-Paint</li>
+<li>flash-TouchGFX-demo2014</li>
+<li>flash-STM32CubeDemo_STM32F429I-Discovery</li>
+</ul>
+
+
+<p><a name="cm4-0-test-stflash"></a></p>
+
+<h3>使用st-flash 開發版燒錄</h3>
+
+<ul>
+<li><code>st-flash write 軔體binary檔案名稱 0x8000000</code></li>
+</ul>
+
+
+<p>為什麼是<code>0x800000</code>呢？可以查一下<a href="http://www.st.com/web/en/resource/technical/document/datasheet/DM00071990.pdf">手冊</a>，上面有說這塊記憶體是分配給flash memory。</p>
+
+<p><a name="cm4-0-test-openocd"></a></p>
+
+<h4>使用openocd 開發版燒錄</h4>
+
+<p>從<a href="https://github.com/jserv/stm32f429-demos">GitHub: jserv/stm32f429-demos</a>裏面的Makefile抄來的。指令比較長，不過這是因為openocd可以把一系列的命令連發的關係</p>
+
+<pre><code>openocd -f interface/stlink-v2.cfg  -f target/stm32f4x.cfg  -c "init"  -c "reset init"  -c "stm32f2x unlock 0"  -c "flash probe 0"  -c "flash info 0"  -c "flash write_image erase 軔體binary檔案名稱 0x8000000"  -c "reset run" -c shutdown
+</code></pre>
+
+<p>使用比較好看的排版
+<code>
+openocd -f interface/stlink-v2.cfg  \
+        -f target/stm32f4x.cfg      \
+        -c "init"                   \
+        -c "reset init"             \
+        -c "stm32f2x unlock 0"      \
+        -c "flash probe 0"          \
+        -c "flash info 0"           \
+        -c "flash write_image erase 軔體binary檔案名稱 0x8000000" \
+        -c "reset run" -c shutdown
+</code></p>
+
+<h4>參數說明</h4>
+
+<ul>
+<li><code>-f</code>
+
+<ul>
+<li>指定config檔案。你可能會想問說interface目錄在那邊，還記得<a href="cm4-0-steps-pkg-install-openocd">前面</a>的動作嘛？</li>
+<li>可以指定
+
+<ul>
+<li>interface: 除錯使用的介面</li>
+<li>target: 執行的平台CPU如STM32F4</li>
+<li>board: 開發版</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>-c</code>
+
+<ul>
+<li>執行openocd指令</li>
+</ul>
+</li>
+</ul>
+
+
+<h4>指令說明</h4>
+
+<ul>
+<li><code>-f interface/stlink-v2.cfg</code></li>
+<li><code>-f target/stm32f4x.cfg</code></li>
+<li><code>-c "init"</code>
+
+<ul>
+<li>結束config stage，開始進入run stage (<a href="http://openocd.org/doc/html/Daemon-Configuration.html#Entering-the-Run-Stage">出處</a>)</li>
+</ul>
+</li>
+<li><code>-c "reset init"</code>
+
+<ul>
+<li>reset 開發版，重新開機(<a href="http://openocd.org/doc/html/General-Commands.html#Target-State-handling">出處</a>)後進入init狀態。</li>
+</ul>
+</li>
+<li><code>-c "stm32f2x unlock 0"</code>
+
+<ul>
+<li>將開發版的flash解鎖(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
+</ul>
+</li>
+<li><code>-c "flash probe 0"</code>
+
+<ul>
+<li>偵測開發版的flash(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
+</ul>
+</li>
+<li><code>-c "flash info 0"</code>
+
+<ul>
+<li>顯示開發版的flash資訊(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
+</ul>
+</li>
+<li><code>-c "flash write_image erase 軔體binary檔案名稱 0x8000000"</code>
+
+<ul>
+<li>將檔案寫入flash(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
+</ul>
+</li>
+<li><code>-c "reset run" -c shutdown</code>
+
+<ul>
+<li>正常重新開機(<a href="http://openocd.org/doc/html/General-Commands.html#Target-State-handling">出處</a>)</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="cm4-0-ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="http://yottadocs.mbed.com/#installing-on-linux">yotta Documentation: Install on Linux</a></li>
+<li><a href="https://launchpad.net/gcc-arm-embedded">ARM Embedded PPA網站</a></li>
+<li><a href="https://launchpad.net/~team-gcc-arm-embedded/+archive/ubuntu/ppa">GNU ARM Embedded Toolchain</a></li>
+<li><a href="https://github.com/jserv/stm32f429-demos">GitHub: jserv/stm32f429-demos</a></li>
+<li><a href="http://openocd.org/doc/html/">OpenOCD手冊</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

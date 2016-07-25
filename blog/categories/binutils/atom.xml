@@ -1,0 +1,1824 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Binutils | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/binutils/atom.xml" rel="self"/>
+  <link href="http://wen00072.github.io/"/>
+  <updated>2016-07-25T12:05:47+08:00</updated>
+  <id>http://wen00072.github.io/</id>
+  <author>
+    <name><![CDATA[Wen Liao]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[談談strip]]></title>
+    <link href="http://wen00072.github.io/blog/2015/11/16/tan-tan-strip/"/>
+    <updated>2015-11-16T21:32:23+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/11/16/tan-tan-strip</id>
+    <content type="html"><![CDATA[<p>Strip，顧名思義，就是脫脫。有興趣的紳士可以估狗strip club。那麼在Linux的binutil中strip是要脫什麼呢？先來問一下男人</p>
+
+<pre><code class="text man strip">STRIP(1)                                    GNU Development Tools                                    STRIP(1)
+
+NAME
+       strip - Discard symbols from object files.
+...
+</code></pre>
+
+<p>用中文說，就是從object 檔中把symbol丟掉。讓我們做幾個小實驗吧。</p>
+
+<ul>
+<li><a href="#strip_test1">測試一：Strip 執行檔</a></li>
+<li><a href="#strip_test2">測試二：Strip Object檔</a></li>
+<li><a href="#strip_test3">測試三：Strip debug 資訊</a></li>
+<li><a href="#strip_test4">測試四：Strip shared library</a></li>
+</ul>
+
+
+<h2>測試環境</h2>
+
+<pre><code class="text">$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.3 LTS
+Release:    14.04
+Codename:   trusty
+</code></pre>
+
+<h2>測試程式</h2>
+
+<pre><code class="c main_test.c">#include &lt;stdio.h&gt;
+extern test();
+
+int main(void)
+{
+    test();
+
+    return 0;
+}
+</code></pre>
+
+<pre><code class="c test.c">#include &lt;stdio.h&gt;
+
+char *g_myStr = "Wen";
+static char *gp_myStr = "Liao";
+
+static void s_test(void)
+{
+    printf("%s %s\n", g_myStr, gp_myStr);
+}
+
+
+void test(void)
+{
+    printf("Hello ");
+    s_test();
+}
+</code></pre>
+
+<pre><code class="Makefile Makefile">TARGET=test
+SRCS=test.c main_test.c
+OBJS=$(patsubst  %.c, %.o, $(SRCS))
+CFLAGS=-g
+
+$(TARGET): $(OBJS)
+    $(CC) $(CFLAGS) $^ -o $@
+
+clean:
+    rm -rf $(TARGET) $(OBJS)
+</code></pre>
+
+<p><a name="strip_test1"></a></p>
+
+<h2>測試一：Strip 執行檔</h2>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ ./test 
+Hello Wen Liao
+
+$ ls test -gG
+-rwxrwxr-x 1 10217 Nov 16 22:33 test
+</code></pre>
+
+<p>可以看到產生出來的執行檔有<code>10217</code> bytes。我們進一步來看執行檔的symbol。</p>
+
+<pre><code class="text">$ nm test
+0000000000601050 B __bss_start
+...
+0000000000601040 D g_myStr
+00000000004003e0 T _init
+...
+0000000000601048 d gp_myStr
+...
+000000000040056d T main
+                 U printf@@GLIBC_2.2.5
+...
+000000000040052d t s_test
+0000000000400553 T test
+0000000000601050 D __TMC_END__
+</code></pre>
+
+<p>那麼來看看strip後的檔案size和symbol吧。你可以看到size變小而且symbol不見了。另外上面可以比對一下<code>t</code>、<code>T</code>、<code>d</code>、<code>D</code>和<code>s_test</code>、<code>test</code>、<code>gp_myStr</code>、<code>g_myStr</code>的關係。</p>
+
+<pre><code class="text">$ strip test
+
+$ ./test 
+Hello Wen Liao
+
+$ nm test
+nm: test: no symbols
+
+$ ls -gG test
+-rwxrwxr-x 1 6296 Nov 16 22:36 test
+</code></pre>
+
+<p><a name="strip_test2"></a></p>
+
+<h2>測試二：Strip Object檔</h2>
+
+<p>因為strip就是把object file (執行檔也是一種object file)的symbol拿掉，所以在link time需要symbol時如果該object檔案被strip過，就會發生錯誤。範例如下：</p>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ nm -a test.o 
+0000000000000000 b .bss
+0000000000000000 n .comment
+0000000000000000 d .data
+0000000000000000 N .debug_abbrev
+0000000000000000 N .debug_aranges
+0000000000000000 N .debug_info
+0000000000000000 N .debug_line
+0000000000000000 N .debug_str
+0000000000000000 r .eh_frame
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+0000000000000000 n .note.GNU-stack
+                 U printf
+0000000000000000 r .rodata
+0000000000000000 t s_test
+0000000000000026 T test
+0000000000000000 a test.c
+0000000000000000 t .text
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ strip test.o 
+
+$ ls -gG test.o
+-rw-rw-r-- 1 952 Nov 16 23:03 test.o
+
+$ nm test.o
+nm: test.o: no symbols
+
+$ make
+cc -g test.o main_test.o -o test
+/usr/bin/ld: error in test.o(.eh_frame); no .eh_frame_hdr table will be created.
+main_test.o: In function `main':
+/home/wen/tmp/sandbox/main_test.c:6: undefined reference to `test'
+collect2: error: ld returned 1 exit status
+make: *** [test] Error 1
+</code></pre>
+
+<p>這邊我<code>nm</code>下了<code>-a</code>參數，這會顯示出<strong>所有的symbol</strong>，預設的<code>nm</code>輸出如下提供比較。</p>
+
+<pre><code class="text">$ nm test.o 
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+                 U printf
+0000000000000000 t s_test
+0000000000000026 T test
+</code></pre>
+
+<p><a name="strip_test3"></a></p>
+
+<h2>測試三：Strip debug 資訊</h2>
+
+<p>其實只是單純要介紹<code>-d</code>參數而已</p>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ strip -d test.o
+
+$ nm -a test.o
+0000000000000000 b .bss
+0000000000000000 n .comment
+0000000000000000 d .data
+0000000000000000 r .eh_frame
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+0000000000000000 n .note.GNU-stack
+                 U printf
+0000000000000000 r .rodata
+0000000000000000 t s_test
+0000000000000026 T test
+0000000000000000 t .text
+
+$ make
+cc -g test.o main_test.o -o test
+
+$ ./test
+Hello Wen Liao
+
+$ ls -gG test test.o
+-rwxrwxr-x 1 9737 Nov 16 23:01 test
+-rw-rw-r-- 1 1896 Nov 16 23:01 test.o
+</code></pre>
+
+<p><a name="strip_test4"></a></p>
+
+<h2>測試四：Strip shared library</h2>
+
+<p>這邊要幹的第一件事是修改Makefile如下。主要是把test.o包裝成shared library，這個Makefile很醜，我知道。</p>
+
+<pre><code class="Makefile Makefile">TARGET=test
+SRC=main_test.c
+OBJ=$(patsubst  %.c, %.o, $(SRC))
+
+LIB_SRC=test.c
+LIB_OBJ=$(patsubst  %.c, %.o, $(LIB_SRC))
+LIB_NAME=test
+LIB=lib$(LIB_NAME).so
+CFLAGS=-g
+
+$(TARGET): $(OBJ) $(LIB)
+    $(CC) $(CFLAGS) $&lt; -o $@ -L./ -l$(LIB_NAME)
+
+$(LIB): $(LIB_OBJ)
+    $(CC) -shared -Wl,-soname,$(LIB).0 $^ -o $@
+    rm $(LIB).0 &amp;&amp; ln -sf $(LIB) $(LIB).0
+
+$(LIB_OBJ): $(LIB_SRC)
+    $(CC) $(CFLAGS) -c -fPIC $^
+
+clean:
+    rm -rf $(TARGET) $(OBJ) $(LIB_OBJ)
+</code></pre>
+
+<p>自幹shared library執行程式的時候不要忘記加上<code>LD_LIBRARY_PATH</code>環境變數：
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make clean
+</span><span class='line'>rm -rf test  main_test.o  test.o&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ make
+</span><span class='line'>cc -g   -c -o main_test.o main_test.c
+</span><span class='line'>cc -g -c -fPIC test.c
+</span><span class='line'>cc -shared -Wl,-soname,libtest.so.0 test.o -o libtest.so
+</span><span class='line'>rm libtest.so.0 &amp;amp;&amp;amp; ln -sf libtest.so libtest.so.0
+</span><span class='line'>cc -g main_test.o -o test -L./ -ltest&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ LD_LIBRARY_PATH=&lt;code&gt;pwd&lt;/code&gt; ./test
+</span><span class='line'>Hello Wen Liao
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>現在來比較strip前後的shared library 差異吧。
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ nm -a libtest.so
+</span><span class='line'>0000000000000000 a
+</span><span class='line'>0000000000201048 b .bss
+</span><span class='line'>0000000000201048 B &lt;strong&gt;bss_start
+</span><span class='line'>0000000000000000 n .comment
+</span><span class='line'>0000000000201048 b completed.6973
+</span><span class='line'>0000000000000000 a crtstuff.c
+</span><span class='line'>0000000000000000 a crtstuff.c
+</span><span class='line'>                 w &lt;/strong&gt;cxa_finalize@@GLIBC_2.2.5
+</span><span class='line'>0000000000201030 d .data
+</span><span class='line'>0000000000000000 N .debug_abbrev
+</span><span class='line'>0000000000000000 N .debug_aranges
+</span><span class='line'>0000000000000000 N .debug_info
+</span><span class='line'>0000000000000000 N .debug_line
+</span><span class='line'>0000000000000000 N .debug_str
+</span><span class='line'>0000000000000650 t deregister_tm_clones
+</span><span class='line'>00000000000006c0 t &lt;strong&gt;do_global_dtors_aux
+</span><span class='line'>0000000000200df0 t &lt;/strong&gt;do_global_dtors_aux_fini_array_entry
+</span><span class='line'>0000000000201030 d &lt;strong&gt;dso_handle
+</span><span class='line'>0000000000200e00 d .dynamic
+</span><span class='line'>0000000000200e00 d &lt;em&gt;DYNAMIC
+</span><span class='line'>0000000000000398 r .dynstr
+</span><span class='line'>0000000000000230 r .dynsym
+</span><span class='line'>0000000000201048 D &lt;/em&gt;edata
+</span><span class='line'>00000000000007c0 r .eh_frame
+</span><span class='line'>000000000000079c r .eh_frame_hdr
+</span><span class='line'>0000000000201050 B &lt;em&gt;end
+</span><span class='line'>000000000000077c T &lt;/em&gt;fini
+</span><span class='line'>000000000000077c t .fini
+</span><span class='line'>0000000000200df0 t .fini_array
+</span><span class='line'>0000000000000700 t frame_dummy
+</span><span class='line'>0000000000200de8 t &lt;/strong&gt;frame_dummy_init_array_entry
+</span><span class='line'>0000000000000840 r &lt;strong&gt;FRAME_END&lt;/strong&gt;
+</span><span class='line'>0000000000201000 d &lt;em&gt;GLOBAL_OFFSET_TABLE&lt;/em&gt;
+</span><span class='line'>                 w &lt;strong&gt;gmon_start&lt;/strong&gt;
+</span><span class='line'>0000000000201038 D g_myStr
+</span><span class='line'>00000000000001f0 r .gnu.hash
+</span><span class='line'>000000000000045c r .gnu.version
+</span><span class='line'>0000000000000480 r .gnu.version_r
+</span><span class='line'>0000000000200fd0 d .got
+</span><span class='line'>0000000000201000 d .got.plt
+</span><span class='line'>0000000000201040 d gp_myStr
+</span><span class='line'>00000000000005f0 T &lt;em&gt;init
+</span><span class='line'>00000000000005f0 t .init
+</span><span class='line'>0000000000200de8 t .init_array
+</span><span class='line'>                 w &lt;/em&gt;ITM_deregisterTMCloneTable
+</span><span class='line'>                 w &lt;em&gt;ITM_registerTMCloneTable
+</span><span class='line'>0000000000200df8 d .jcr
+</span><span class='line'>0000000000200df8 d &lt;strong&gt;JCR_END&lt;/strong&gt;
+</span><span class='line'>0000000000200df8 d &lt;strong&gt;JCR_LIST&lt;/strong&gt;
+</span><span class='line'>                 w &lt;/em&gt;Jv_RegisterClasses
+</span><span class='line'>00000000000001c8 r .note.gnu.build-id
+</span><span class='line'>0000000000000610 t .plt
+</span><span class='line'>                 U printf@@GLIBC_2.2.5
+</span><span class='line'>0000000000000680 t register_tm_clones
+</span><span class='line'>00000000000004a0 r .rela.dyn
+</span><span class='line'>00000000000005a8 r .rela.plt
+</span><span class='line'>0000000000000785 r .rodata
+</span><span class='line'>0000000000000735 t s_test
+</span><span class='line'>0000000000000760 T test
+</span><span class='line'>0000000000000000 a test.c
+</span><span class='line'>0000000000000650 t .text
+</span><span class='line'>0000000000201048 d &lt;strong&gt;TMC_END&lt;/strong&gt;&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ ls -gG libtest.so
+</span><span class='line'>-rwxrwxr-x 1 9275 Nov 16 23:47 libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ strip libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ ls -gG libtest.so
+</span><span class='line'>-rwxrwxr-x 1 6104 Nov 16 23:47 libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ nm -a libtest.so
+</span><span class='line'>nm: libtest.so: no symbols&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ LD_LIBRARY_PATH=&lt;code&gt;pwd&lt;/code&gt; ./test
+</span><span class='line'>Hello Wen Liao
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>這邊變成有新的作業，dynamic link的時候沒有shared library沒有symbol怎麼拿到function address和全域變數？下次有看到再來解釋吧。</p>
+
+<h2>補充</h2>
+
+<p>如果編譯的程式碼有加入debug資訊，objdump在反組譯的時候可以加入<code>-S</code>參數比對原始碼對應的機械碼，對於想要研究系統細節的人應該有所幫助。簡單範例如下</p>
+
+<pre><code class="text"> x$ make clean
+rm -rf test  test.o  main_test.o
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ objdump -S -d test
+
+test:     file format elf64-x86-64
+
+
+Disassembly of section .init:
+
+00000000004003e0 &lt;_init&gt;:
+  4003e0:   48 83 ec 08             sub    $0x8,%rsp
+...
+
+0000000000400553 &lt;test&gt;:
+
+
+void test(void)
+{
+  400553:   55                      push   %rbp
+  400554:   48 89 e5                mov    %rsp,%rbp
+    printf("Hello ");
+  400557:   bf 24 06 40 00          mov    $0x400624,%edi
+  40055c:   b8 00 00 00 00          mov    $0x0,%eax
+  400561:   e8 aa fe ff ff          callq  400410 &lt;printf@plt&gt;
+    s_test();
+  400566:   e8 c2 ff ff ff          callq  40052d &lt;s_test&gt;
+}
+  40056b:   5d                      pop    %rbp
+  40056c:   c3                      retq   
+
+...
+</code></pre>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>Binary Hacks：駭客秘傳技巧一百招</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[系統函式庫的debug 資訊放在那邊？]]></title>
+    <link href="http://wen00072.github.io/blog/2015/02/20/system-class-library-debug-over-there/"/>
+    <updated>2015-02-20T17:17:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/02/20/system-class-library-debug-over-there</id>
+    <content type="html"><![CDATA[<p>在查詢hello world中的<code>_start</code>呼叫<code>__libc_start_main</code>部份，使用到了反組譯工具。觀察反組譯的部份發現有可能需要看一下libc本身的<code>__libc_start_main</code>組合語言的行為。以前的經驗，這種情況先拉有debug 資訊的套件來看，所以拉了libc6-dbg下來，結果下來的結果，<font color="red">完全無法反組譯</font>。後來請教網友<a href="http://scottt.tw/">Scott Tasi</a>才發現我錯很大。</p>
+
+<p>先講結論：</p>
+
+<ul>
+<li>libc的debug 資訊和本身的binary完全隔開。所以反組譯要看的仍然是在原本的libc.so這個檔案。</li>
+</ul>
+
+
+<p>年紀大了才發現能夠從結論中問問題收穫會更多，所以我就來問</p>
+
+<ul>
+<li>問題一：誰來用這些debug 資訊?</li>
+<li>問題二：既然debug 資訊不在binary內？那麼怎麼找到額外的debug 資訊?</li>
+</ul>
+
+
+<p>先來回答誰來用這些debug 資訊？其實這個根本就是廢話，gdb用心酸的啊。其實這只是在鋪梗，這表示找第二個問題的答案就會和gdb有很大的關係，也就是說我們可以把問題縮小到和gdb相關 <a href="#rk1">（註一）</a>。</p>
+
+<p>好，我們來重複問題二</p>
+
+<ul>
+<li>既然debug 資訊不在binary內？那麼怎麼找到額外的debug 資訊?</li>
+</ul>
+
+
+<p>從常理來猜測，顯然是原本的binary有地方告訴gdb「有額外的除錯檔案，請你載入的時候去那邊抓除錯資訊」。我們直接看<a href="https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html">GDB手冊</a>怎麼說</p>
+
+<ul>
+<li>gdb允許把debug 資訊放在binary外面，而gdb可以透過兩種方式取得
+
+<ul>
+<li>執行的binary內提供link讓gdb可以摸到有debug 資訊的檔案。如果是執行檔，可能就稱為<code>執行檔.debug</code>。
+
+<ul>
+<li>這個link資料，放兩個東西
+
+<ul>
+<li>不包含directory的檔案名稱</li>
+<li>該檔案名稱算出的CRC 碼</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>透過build ID，因為和我找的無關，跳過。我們focus在第一個方式。</li>
+</ul>
+</li>
+</ul>
+
+
+<p>有了debug link資訊後，仍然有幾個細節需要釐清</p>
+
+<ul>
+<li>問題三：debug 資訊檔案放在哪個目錄？</li>
+<li>問題四：debug link放在binary 的哪裡？</li>
+</ul>
+
+
+<p>一樣來看手冊。手冊上說debug 資訊檔案會依以下的順序搜尋</p>
+
+<ul>
+<li>該執行檔的存放目錄</li>
+<li>該執行檔的存放目錄下面同樣目錄名稱，但是加上.debug。如/usr/bin -> /usr/bin.debug/</li>
+<li>系統預設的debug 目錄</li>
+</ul>
+
+
+<p>以上是問題三的的解答，剩下問題四我就認為可以把整個故事說完。所以來看問題四吧。</p>
+
+<ul>
+<li>問題四：debug link放在binary 的哪裡？</li>
+</ul>
+
+
+<p>同樣的在手冊中有提到，binary 中有特別的section稱為<code>.gnu_debuglink</code>，就是存放debug 資訊檔案的資訊。存放的資訊為</p>
+
+<ul>
+<li>存放debug 資訊的檔案名稱</li>
+<li>padding for 4-byte alignment</li>
+<li>4 byte CRC checksum</li>
+</ul>
+
+
+<p>好啦，有了完整的故事，當然要看是不是在唬爛。我們來看libc.so吧</p>
+
+<pre><code>$ pwd
+/lib/arm-linux-gnueabi
+$ objdump -h libc-2.19.so | grep debug
+ 68 .gnu_debuglink 00000014  00000000  00000000  001336a0  2**0
+$ objdump -s -j .gnu_debuglink libc-2.19.so 
+
+libc-2.19.so:     file format elf32-littlearm
+
+Contents of section .gnu_debuglink:
+ 0000 6c696263 2d322e31 392e736f 00000000  libc-2.19.so....
+ 0010 1b8f248c                             ..$. 
+
+$ sudo apt-get install libc6-dbg
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+The following NEW packages will be installed:
+  libc6-dbg
+0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+Need to get 3,290 kB of archives.
+After this operation, 18.1 MB of additional disk space will be used.
+Get:1 http://不告訴你/debian/ jessie/main libc6-dbg armel 2.19-13 [3,290 kB]
+Fetched 3,290 kB in 4s (701 kB/s)      
+Selecting previously unselected package libc6-dbg:armel.
+(Reading database ... 46987 files and directories currently installed.)
+Preparing to unpack .../libc6-dbg_2.19-13_armel.deb ...
+Unpacking libc6-dbg:armel (2.19-13) ...
+Setting up libc6-dbg:armel (2.19-13) ...
+$ find /usr/lib/debug/ |grep libc-2
+/usr/lib/debug/lib/arm-linux-gnueabi/libc-2.19.so
+</code></pre>
+
+<p>那麼這個和我原本要反組譯libc的結果有什麼關係？嘛，旅行的精華就是在迷路不是嗎？</p>
+
+<hr />
+
+<h2>測試環境</h2>
+
+<pre><code>$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Debian
+Description:    Debian GNU/Linux 8.0 (jessie)
+Release:    8.0
+Codename:   jessie
+
+$ uname -a
+Linux debian 3.2.0-4-versatile #1 Debian 3.2.65-1+deb7u1 armv5tejl GNU/Linux
+
+$ gcc -dumpmachine
+arm-linux-gnueabi
+</code></pre>
+
+<hr />
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html">GDB Manuel: Debugging Information in Separate Files</a></li>
+<li><a href="http://fcamel-life.blogspot.tw/2012/01/gdb-debug-symbol.html">fcamel: gdb 如何找到 debug symbol</a></li>
+<li><a href="https://blogs.oracle.com/dbx/entry/gnu_debuglink_or_debugging_system">.gnu_debuglink or Debugging system libraries with source code</a></li>
+</ul>
+
+
+<hr />
+
+<h2>註解</h2>
+
+<p><a name="rk1"></a>
+一：精確來說，這應該不是只有gdb才能用，我不過偷懶而已。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Hello World在那邊？背景說明投影片上線]]></title>
+    <link href="http://wen00072.github.io/blog/2015/01/24/hello-world-in-where-background-note-slides-on-line/"/>
+    <updated>2015-01-24T16:35:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/01/24/hello-world-in-where-background-note-slides-on-line</id>
+    <content type="html"><![CDATA[<iframe src="//www.slideshare.net/slideshow/embed_code/43848623" width="425" height="355" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe>
+
+
+<p> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/zzz00072/hello-world-43848623" title="Hello world在那邊？背景說明" target="_blank">Hello world在那邊？背景說明</a> </strong> from <strong><a href="//www.slideshare.net/zzz00072" target="_blank">Wen Liao</a></strong> </div></p>
+
+<script async class="speakerdeck-embed" data-id="d8f1004085d00132de3b7a1c3ec56d64" data-ratio="1.33333333333333" src="//speakerdeck.com/assets/embed.js"></script>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[GNU Ld的linker Script簡介投影片上線]]></title>
+    <link href="http://wen00072.github.io/blog/2014/12/25/introduction-to-gnu-ld-linker-script-slides-on-line/"/>
+    <updated>2014-12-25T11:01:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2014/12/25/introduction-to-gnu-ld-linker-script-slides-on-line</id>
+    <content type="html"><![CDATA[<iframe src="//www.slideshare.net/slideshow/embed_code/42996920" width="425" height="355" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe>
+
+
+<p> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/zzz00072/gnu-ldlinker-script" title="Gnu ld的linker script簡介" target="_blank">GNU ld的linker script簡介</a> </strong> from <strong><a href="//www.slideshare.net/zzz00072" target="_blank">Wen Liao</a></strong> </div></p>
+
+<script async class="speakerdeck-embed" data-id="cb9576a06e0f0132f68022c1cc0a8a7f" data-ratio="1.33333333333333" src="//speakerdeck.com/assets/embed.js"></script>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[GNU LD 手冊略讀 (3): Chapter 3.7 ~ Chapter 3.11]]></title>
+    <link href="http://wen00072.github.io/blog/2014/12/15/study-on-the-linker-script-3/"/>
+    <updated>2014-12-15T00:06:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2014/12/15/study-on-the-linker-script-3</id>
+    <content type="html"><![CDATA[<p><a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-2-setcion-command">上一篇</a>
+<a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-0-table-of-contents">回總目錄</a></p>
+
+<h2>本篇目錄</h2>
+
+<ul>
+<li><a href="#mem">MEMORY命令</a></li>
+<li><a href="#phdr">PHDRS命令</a></li>
+<li><a href="#ver">VERSION命令</a></li>
+<li><a href="#expr">Linker script 中使用的expression</a>
+
+<ul>
+<li><a href="#expr-const">常數</a></li>
+<li><a href="#expr-sym-const">Symbolic 常數</a></li>
+<li><a href="#expr-sym">Symbol命名規則</a></li>
+<li><a href="#expr-oph-sec">孤兒 Section</a></li>
+<li><a href="#expr-lcnt">Location Counter</a></li>
+<li><a href="#expr-op">Operators</a></li>
+<li><a href="#expr-eval">計算結果</a></li>
+<li><a href="#expr-sec">Expression 計算結果和absolute/relative address的關係</a></li>
+<li><a href="#expr-btfun">內建函數</a></li>
+</ul>
+</li>
+<li><a href="#imp">Implicit Linker Scripts</a></li>
+<li><a href="#todo">待釐清項目</a></li>
+<li><a href="#ref">參考資料</a></li>
+</ul>
+
+
+<p><a name="mem"></a></p>
+
+<h2>MEMORY命令</h2>
+
+<p>預設的linker會將所有的memory space視為可以分配的。然而現實生活這個假設不一定成立，例如你寫資料到ROM的記憶體就保證GG。所以linker script提供了<code>MEMORY</code>命令讓你畫地盤，告訴linker那塊地盤有什麼樣的特性。該命令會描述</p>
+
+<ul>
+<li>你給這塊記憶體取的名稱，也就是說前面一直講的region</li>
+<li>起始位址</li>
+<li>上面位址後面的記憶體大小</li>
+<li>這塊記憶體有什麼限制</li>
+</ul>
+
+
+<p>命令語法如下：</p>
+
+<pre><code class="c">MEMORY
+{
+    name [(attr)] : ORIGIN = origin, LENGTH = len
+    ...
+}
+</code></pre>
+
+<p>每個欄位說明如下</p>
+
+<ul>
+<li><code>name</code>
+
+<ul>
+<li>你給這塊記憶體取的名稱，也就是說前面一直講的region(以下以region稱呼)。這個名稱不可以和同個linker script中以下的名稱相同：
+
+<ul>
+<li>symbol名稱</li>
+<li>section名稱</li>
+<li>檔案名稱</li>
+</ul>
+</li>
+<li>每塊region都要給個名字，這些名字可以給他取alias，這部份請參考<a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-1#cmd-alias"><code>REGION_ALIAS</code>命令</a></li>
+</ul>
+</li>
+<li><code>attr</code>
+
+<ul>
+<li>optional</li>
+<li>告訴linker這塊記憶體有什麼值得注意的地方，一個region可以有多個屬性，列出如下
+
+<pre><code>* `R`: Read only
+* `W`: 可讀寫
+* `X`: executable
+* `A`: 可allocate
+* `I`和`L`: Initialized section (三小？)
+* `!`: 將該符號後面所有的屬性inverse
+</code></pre>
+
+<ul>
+<li>如果一個section符合上面的條件，就可以放在這個region中</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>ORIGIN</code>
+
+<ul>
+<li>一個expression，表示該region的起始位址</li>
+</ul>
+</li>
+<li><code>LENGTH</code>
+
+<ul>
+<li>region 大小，單位為byte</li>
+</ul>
+</li>
+</ul>
+
+
+<p>下面的範例可以看到</p>
+
+<ul>
+<li>有兩個region</li>
+<li>region <code>rom</code>的資訊：
+
+<ul>
+<li>唯讀、可執行</li>
+<li>起始位址為<code>0</code></li>
+<li>長度為256k</li>
+</ul>
+</li>
+<li>region <code>ram</code>的資訊：
+
+<ul>
+<li>非唯讀、不可執行</li>
+<li>起始位址為<code>0x40000000</code></li>
+<li>長度為4M
+
+<ul>
+<li>使用了縮寫，縮寫規則不想翻，請自己<a href="https://sourceware.org/binutils/docs/ld/MEMORY.html#MEMORY">看這邊</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<pre><code class="c">MEMORY
+{
+    rom (rx)  : ORIGIN = 0, LENGTH = 256K
+    ram (!rx) : org = 0x40000000, l = 4M
+}
+</code></pre>
+
+<p>region和section的合體部份<a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-2-setcion-command#sec-output-attr-region">前面</a>有提過了。如果沒有指定region的話，linker會從目前region挑一個給你用。除此之外，你的section空間region塞不下的話linker會幫你偵測出來。</p>
+
+<p>另外ORIGIN和LENGTH可以當作查詢region的資訊，範例如下</p>
+
+<pre><code class="c">_fstack = ORIGIN(ram) + LENGTH(ram) - 4;
+</code></pre>
+
+<p><a name="phdr"></a></p>
+
+<h2>PHDRS命令</h2>
+
+<p>資源回收上一篇講的東西。<strong>基本上我不知道elf是三小，所以很有可能這部份有錯誤，請自行斟酌！</strong></p>
+
+<p>PHDR 是<a href="http://en.wikipedia.org/wiki/Executable_and_Linkable_Format">ELF</a>的program header縮寫，又稱為segment（以後以segment稱之）。當ELF loader載入ELF執行檔的時候，會看這些segment決定要如何把讀入的檔案放在記憶體中，這部份和<a href="http://en.wikipedia.org/wiki/Application_binary_interface">ABI</a>有關係，按下不表，等我那天心情好再來看ELF和ABI。你可以透過<code>objdump -p</code>觀察program header。</p>
+
+<p>一般來說，linker預設都幫你弄好elf相關的segment。但是如果你因故需要自幹的話，就可以用<code>PHDRS</code>命令，一旦使用了這個命令，linker預設的相關segment設定將被取消。另外這個命令只對elf格式輸出有意義，非elf格式輸出這部份的指令一律失效。</p>
+
+<p><code>PHDRS</code>命令格式如下：</p>
+
+<pre><code class="c">PHDRS
+{
+    name type [ FILEHDR ] [ PHDRS ] [ AT ( address ) ]
+            [ FLAGS ( flags ) ] ;
+}
+</code></pre>
+
+<ul>
+<li><code>name</code>
+
+<ul>
+<li>配合section命令使用，語法可以看<a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-2-setcion-command#sec-output-attr-output-phdr">這邊</a></li>
+<li>segment名稱因為存放在另外的name space，所以不用擔心和symbol, 檔案, section衝突。</li>
+</ul>
+</li>
+<li><code>type</code>
+
+<ul>
+<li>規範為
+
+<ul>
+<li><code>PT_NULL</code> (對應值： 0)
+
+<ul>
+<li>沒使用的segment</li>
+</ul>
+</li>
+<li><code>PT_LOAD</code> (對應值： 1)
+
+<ul>
+<li>該segment應從檔案中載入</li>
+</ul>
+</li>
+<li><code>PT_DYNAMIC</code> (對應值： 2)
+
+<ul>
+<li>存放dynamic link的資訊</li>
+</ul>
+</li>
+<li><code>PT_INTERP</code> (對應值： 3)
+
+<ul>
+<li>指定program interpretor 路徑</li>
+<li><code>readelf -l ls</code>可以看到該INTERP segment的資料是是<code>/lib64/ld-linux-x86-64.so.2</code>，這邊似乎有些好玩的線索，一樣等到想起來再來看看。</li>
+</ul>
+</li>
+<li><code>PT_NOTE</code> (對應值： 4)
+
+<ul>
+<li><code>man elf</code>說這個是存放輔助資料</li>
+</ul>
+</li>
+<li><code>PT_SHLIB</code> (對應值： 5)
+
+<ul>
+<li>保留未使用</li>
+</ul>
+</li>
+<li><code>PT_PHDR</code> (對應值： 6)
+
+<ul>
+<li>program header存放的segment</li>
+</ul>
+</li>
+<li>expression
+
+<ul>
+<li>除了以上自訂的數字，應該是保留給使用自行使用&hellip;吧？</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>每個<code>type</code>後面都可以加上<code>FILEHDR</code>或<code>PHDRS</code>，其中
+
+<ul>
+<li><code>FILEHDR</code>：表示該segment應該內含ELF file header</li>
+<li><code>PHDRS</code>：表示該segment應該內含ELF program header</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>AT</code>
+
+<ul>
+<li>指定load 位址。和section的<a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-2-setcion-command#sec-output-attr-lma">AT</a>相同</li>
+</ul>
+</li>
+<li><code>FLAGS(數字)</code>
+
+<ul>
+<li>數字是ELF的<code>p_flags</code>。<code>man elf</code>可以查到<code>p_flags</code>定義，數值我猜要去看程式碼或是ELF規格了。
+
+<ul>
+<li><code>PF_X</code>: executable segment</li>
+<li><code>PF_W</code>: write segment</li>
+<li><code>PF_R</code>: read segment</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p>單個segment通常map到一個section，linker依照順序處理header給之後的loader使用。另外要注意的是如果你在某個section指定了<code>:phdr</code>後，之後的section就算沒指令，都會放在該segment。如果之後的section有<code>:phdr</code>設成<code>:NONE</code>的話，linker才不會把之後的section放到任何segment。</p>
+
+<p>如果有需要，你可以指定不同的segment都要有某個section的內容，使用方式就是在<code>section</code>命令中用多個<code>:phdr</code>。範例如下：</p>
+
+<pre><code class="c">.interp : { *(.interp) } :text :interp
+</code></pre>
+
+<p>手冊上面提供了一個比較完整的範例。望文生義應該不難理解，所以就不解釋了。</p>
+
+<pre><code class="c">PHDRS
+{
+    headers PT_PHDR PHDRS ;
+    interp PT_INTERP ;
+    text PT_LOAD FILEHDR PHDRS ;
+    data PT_LOAD ;
+    dynamic PT_DYNAMIC ;
+}
+
+SECTIONS
+{
+    . = SIZEOF_HEADERS;
+    .interp : { *(.interp) } :text :interp
+    .text : { *(.text) } :text
+    .rodata : { *(.rodata) } /* defaults to :text */
+    ...
+    . = . + 0x1000; /* move to a new page in memory */
+    .data : { *(.data) } :data
+    .dynamic : { *(.dynamic) } :data :dynamic
+    ...
+}
+</code></pre>
+
+<p><a name="ver"></a></p>
+
+<h2>VERSION命令</h2>
+
+<p>ELF檔案格式支援動態link的時候指定shared library版本。這項功能需要linker配合，<code>VERSION</code>命令就是來描述版本資訊。</p>
+
+<p>語法如下</p>
+
+<pre><code class="c">VERSION [extern "lang"] { version-script-commands }
+</code></pre>
+
+<p>其中 extern &quot;lang&quot; 的lang有支援</p>
+
+<ul>
+<li><code>C</code></li>
+<li><code>C++</code></li>
+<li><code>Java</code></li>
+</ul>
+
+
+<p>至於version-script-commands，手冊上面說和Sun(已被併購)在Solaris 2.5上的linker語法相同，估狗查version-script-commands沒查到語法，只能從手冊提供的範例來看。如果有人知道語法link請跟我說。手冊上面說這是一個樹狀結構，基本單位為一個version node。你可以在version node中設定</p>
+
+<ul>
+<li>version node名稱</li>
+<li>version node和相依性</li>
+<li>設定哪些symbol出現在該version node</li>
+<li>在該version node中指定global symbol變成local。如此一來，這些symbols就不會被shared library以外看到。</li>
+</ul>
+
+
+<p>從手冊範例可以推測version node格式如下</p>
+
+<pre><code class="c">name {
+    [global:]
+                symbol1;
+        ...
+    [local:]
+                symbol_a;
+            ...
+} [depend_name];
+</code></pre>
+
+<p>好啦，有這樣的概念後我們來看手冊範例</p>
+
+<pre><code class="c">VERS_1.1 {
+    global:
+            foo1;
+    local:
+            old*;
+            original*;
+            new*;
+};
+
+VERS_1.2 {
+    foo2;
+} VERS_1.1;
+
+VERS_2.0 {
+            bar1; bar2;
+    extern "C++" {
+                    ns::*;
+                    "f(int, double)";
+    };
+} VERS_1.2;
+</code></pre>
+
+<p>OK，開始解釋：</p>
+
+<ul>
+<li>有三個Version node，名稱為<code>VERS_1.1</code>, <code>VERS_1.2</code>, <code>VERS_2.0</code></li>
+<li><code>VERS_1.1</code>沒有相依性，<code>VERS_1.2</code>相依於<code>VERS_1.1</code>, <code>VERS_2.0</code>相依於<code>VERS_1.2</code></li>
+<li><code>VERS_1.1</code>中
+
+<ul>
+<li>symbol <code>foo1</code>和<code>VERS_1.1</code>有關</li>
+<li>old開頭、orignal開頭和new開頭的symbol都不會被外面看到</li>
+</ul>
+</li>
+<li><code>VERS_1.2</code>中
+
+<ul>
+<li>symbol <code>foo2</code>和<code>VERS_1.2</code>有關</li>
+</ul>
+</li>
+<li><code>VERS_2.0</code>中
+
+<ul>
+<li><code>bar1</code>和<code>bar2</code>和<code>VERS_2.0</code>有關</li>
+</ul>
+</li>
+</ul>
+
+
+<p>看完些描述後，可以問<strong>啊沒有指定和version node相關的symbol怎麼辦？</strong>手冊說會分配給library的base version（好吧我不知道base version是三小。）。如果你要將沒指定version node的symbol全部設成和某個version node有關的話，請在該version node中加上以下的描述：</p>
+
+<ul>
+<li><code>global: *;</code></li>
+</ul>
+
+
+<p>一般來說這個描述加再最後的version node才有意義，否則在前面的version node中把所有的symbol都被設定完畢的話，那接下來的version node就沒有辦法設定symbol關聯性的。</p>
+
+<p>手冊中指出version node名稱是給人看的，對於linker在乎的只有他們的關係。所以你要故意取成讓人看不懂的名稱也可以滴。</p>
+
+<p>如果你要指定所有的版本都使用同樣的symbol設定，那麼寫一份就好。重點是這份描述不用寫version node名稱，範例如下。</p>
+
+<pre><code class="c">{ global: foo; bar; local: *; };
+</code></pre>
+
+<p>至於在程式碼中指定版本的方式，你需要使用GNU extention語法，例如加入下面的<del>咒與</del>描述到你的程式碼中。
+語法如下：</p>
+
+<pre><code class="c">__asm__(.symver name, name2@version_node_name);
+</code></pre>
+
+<ul>
+<li><code>.symver</code>：你應該用的指令</li>
+<li><code>name</code>：你程式用到的symbol</li>
+<li><code>name2@version_node_name</code>：實際上你真正用的symbol以及對應的version node</li>
+</ul>
+
+
+<p>範例如下：</p>
+
+<pre><code class="c">__asm__(".symver original_foo,foo@VERS_1.1");
+</code></pre>
+
+<p>你也可以分別指定自己程式的symbol對應到不同版本的symbol，範例如下：</p>
+
+<pre><code class="c">__asm__(".symver original_foo,foo@");
+__asm__(".symver old_foo,foo@VERS_1.1");
+__asm__(".symver old_foo1,foo@VERS_1.2");
+__asm__(".symver new_foo,foo@@VERS_2.0");
+</code></pre>
+
+<ul>
+<li><code>foo@</code>表示未指定版號的symbol就用該symbol</li>
+<li><code>foo@@VERS_2.0</code>的<code>@@</code>表示預設使用該設定</li>
+</ul>
+
+
+<p><code>.symver</code>詳細的語法說明可以看<a href="https://sourceware.org/binutils/docs/as/Symver.html">這邊</a></p>
+
+<p><strong>下面這段是囈言囈語，因為我在描述一個我不知道什麼、以及不知道我在描述什麼的東西，請當作夢話跳過！</strong>
+當你的程式要使用shared library的symbol的時候，你的程式應該要知道要用哪個版本的symbol以及這些symbol是在哪個version node宣告（怎麼做？我寫程式還要管shared library symbol版本，看linker script？不合理）。所以runtime的時候dynamic loader可以幫你搞定resolve symbol的事情。</p>
+
+<p>跳過解釋需要version 的原因，想知道的可以看<a href="https://sourceware.org/binutils/docs/ld/VERSION.html#VERSION">原文</a>，看懂順便跟我說。</p>
+
+<p>Demangled names的注意事項懶得看，一併跳過。</p>
+
+<p><a name="expr"></a></p>
+
+<h2>Linker script 中使用的expression</h2>
+
+<p>Linker script 的 expression有幾點特性</p>
+
+<ul>
+<li>expression和C語言相同</li>
+<li>型態都是整數</li>
+<li>變數size相同，target和host為32-bit的話size就是32-bit，否則就為64-bit(為啥？那麼可不可以8, 16-bit?）。</li>
+<li>expression中允許設定和讀取symbol的值</li>
+</ul>
+
+
+<p>接下來我們來討論linker 中Expression可以使用的內建功能</p>
+
+<ul>
+<li><a href="#expr-const">常數</a></li>
+<li><a href="#expr-sym-const">Symbolic 常數</a></li>
+<li><a href="#expr-sym">Symbol命名規則</a></li>
+<li><a href="#expr-oph-sec">孤兒 Section</a></li>
+<li><a href="#expr-lcnt">Location Counter</a></li>
+<li><a href="#expr-op">Operators</a></li>
+<li><a href="#expr-eval">計算結果</a></li>
+<li><a href="#expr-sec">Section內的Expression</a></li>
+<li><a href="#expr-btfun">內建函數</a></li>
+</ul>
+
+
+<p><a name="expr-const"></a></p>
+
+<h2>常數</h2>
+
+<p>設定常數規則如下</p>
+
+<ul>
+<li>8進位
+
+<ul>
+<li><code>0</code>開頭</li>
+<li><code>o</code>結尾, <code>O</code>結尾</li>
+</ul>
+</li>
+<li>16進位
+
+<ul>
+<li><code>0x</code>開頭, <code>0X</code>開頭：</li>
+<li><code>h</code>結尾, <code>H</code>結尾</li>
+</ul>
+</li>
+<li>10進位
+
+<ul>
+<li><code>d</code>結尾, <code>D</code>結尾</li>
+</ul>
+</li>
+<li>不屬於上面的數字表示為10進位</li>
+<li><code>K</code>
+
+<ul>
+<li>1024</li>
+</ul>
+</li>
+<li><code>M</code>
+
+<ul>
+<li>1024 * 1024</li>
+</ul>
+</li>
+<li><code>K</code>和<code>M</code>不能跟下面的描述混用
+
+<ul>
+<li><code>o</code>結尾, <code>O</code>結尾</li>
+<li><code>h</code>結尾, <code>H</code>結尾</li>
+<li><code>d</code>結尾, <code>D</code>結尾</li>
+</ul>
+</li>
+</ul>
+
+
+<p>範例：</p>
+
+<pre><code class="c">_fourk_1 = 4K;
+_fourk_2 = 4096;
+_fourk_3 = 0x1000;
+_fourk_4 = 10000o;
+</code></pre>
+
+<p><a name="expr-sym-const"></a></p>
+
+<h2>Symbolic 常數</h2>
+
+<p>指令：</p>
+
+<ul>
+<li><code>CONSTANT(name)</code>
+
+<ul>
+<li>合法的<code>name</code>如下，可以望文生義所以就不解釋
+
+<ul>
+<li><code>MAXPAGESIZE</code></li>
+<li><code>COMMONPAGESIZE</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p>範例：指定<code>.text</code> section要和最大的page size對齊。</p>
+
+<pre><code class="c">.text ALIGN (CONSTANT (MAXPAGESIZE)) : { *(.text) }
+</code></pre>
+
+<p><a name="expr-sym"></a></p>
+
+<h2>Symbol命名規則</h2>
+
+<p>沒有被<code>"</code>引用的情況下：</p>
+
+<ul>
+<li>允許的開頭字元
+
+<ul>
+<li>大小寫英文字母</li>
+<li><code>_</code></li>
+<li><code>.</code></li>
+</ul>
+</li>
+<li>名稱中間允許字元
+
+<ul>
+<li>大小寫英文字母</li>
+<li>數字</li>
+<li><code>_</code></li>
+<li><code>.</code>
+
+<ul>
+<li><code>-</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>不可以和linker script keyword相同名稱</li>
+</ul>
+
+
+<p>如果你symbol名稱要用奇怪的字元或是和keyword相同的話，請將symbol名稱的開始結尾加上<code>"</code>符號，範例如下：</p>
+
+<pre><code class="c">"SECTION" = 9;
+"with a space" = "also with a space" + 10;
+</code></pre>
+
+<p>由於symbol名稱可以有非英文字母和數字，所以不建議中間有空白字元。舉例來說，<code>A-B</code>是一個符號，但是<code>A - B</code>就是一個expression操作，表示symbol <code>A</code>減去symbol <code>B</code></p>
+
+<p><a name="expr-oph-sec"></a></p>
+
+<h2>孤兒 Section</h2>
+
+<p>孤兒 Section 指的是在輸入object檔案中的section，而這些section linker script裏面並沒有描述該怎麼處理。遇到這種狀況，linker還是會把這些section放到輸出object檔案中，規則為：</p>
+
+<ul>
+<li>放在輸出object檔案相同性質section的後面，如程式碼或是資料、是否要load到記憶體等。如果是ELF格式的話，ELF flag也是性質比較的一部份。</li>
+<li>如果放不進去，就塞在檔案後面</li>
+</ul>
+
+
+<p>如果這些孤兒section符合C語言<a href="http://cs.smith.edu/~thiebaut/classes/C_Tutor/node4.html">identifier規範</a>(通常不是以<code>.</code>開頭），linker會幫忙加入兩個symbol：<code>__start_SECNAME</code>和<code>__stop_SECNAME</code>表示該section的起始和結束位址。而<code>SECNAME</code>就是該孤兒section名稱。</p>
+
+<p><a name="expr-lcnt"></a></p>
+
+<h2>Location Counter</h2>
+
+<p>前面有提過<code>.</code>這個符號是location counter。而location counter本身的涵意就是<strong>目前輸出位置</strong>。而<code>.</code>
+可以出現在<code>SECTIONS</code>命令中的任何expression。</p>
+
+<p>除了使用<code>.</code>來代表目前輸出位置外，你也可以直接更改<code>.</code>的數值，這樣做就是更動目前輸出位置。不過要注意的是不要用做減法運算，這樣代表把目前位置往前移動，往前移動表示接下來寫入的東西就很有可能蓋掉前面重疊部份的資料。另外你可以直接把<code>.</code>的值加上你要的數量，那麼下一個symbol或是section就會和目前位置有一段保留空間可以使用。我們看下面的範例：</p>
+
+<pre><code class="c">SECTIONS
+{
+    output :
+    {
+        file1(.text)
+        . = . + 1000;
+        file2(.text)
+        . += 1000;
+        file3(.text)
+    } = 0x12345678;
+}
+</code></pre>
+
+<p>這個範例我們可以看到</p>
+
+<ul>
+<li>輸出object檔案有一個section，該section名稱為<code>output</code></li>
+<li><code>output</code> section裏面存放了
+
+<ul>
+<li><code>file1</code>的<code>.text</code> section</li>
+<li><code>file2</code>的<code>.text</code> section</li>
+<li><code>file3</code>的<code>.text</code> section</li>
+</ul>
+</li>
+<li><code>file1</code>的<code>.text</code> section和<code>file2</code>的<code>.text</code> section中間相距1000</li>
+<li><code>file2</code>的<code>.text</code> section和<code>file3</code>的<code>.text</code> section中間也相距1000</li>
+<li>未始用到的空間請填入<code>0x12345678</code>，想要劇情回顧的請看<a href="http://wen00072.github.io/blog/2014/12/14/study-on-the-linker-script-2-setcion-command#sec-input-desc-ex">這邊</a></li>
+</ul>
+
+
+<p><code>.</code>雖然是location counter，然而在不同的區塊使用會有不同的意義。
+先看一個例子</p>
+
+<pre><code class="c">SECTIONS
+{
+  . = 0x100
+  .text: {
+    *(.text)
+  . = 0x200
+  }
+  . = 0x500
+  .data: {
+    *(.data)
+    . += 0x600
+  }
+}
+</code></pre>
+
+<p>我們可以看到<code>.</code>出現的地方有四個地方，在<code>.text</code>和<code>.data</code>以內有各有一個，不在<code>.text</code>和<code>.data</code>以內有兩個。也就是說一種是在section描述（就是<code>.text</code>和<code>.data</code>)之內，另外就是section描述之外。</p>
+
+<ul>
+<li><code>.</code>放在section描述<strong>裏面</strong>的話它的location是從section開頭開始算</li>
+<li><code>.</code>放在section描述<strong>外面</strong>的話它的location是從0</li>
+</ul>
+
+
+<p>有了這樣的概念後，我們再回去看這範例在講三小？</p>
+
+<ul>
+<li>輸出object檔案有兩個section，分別為<code>.text</code>和<code>.data</code></li>
+<li>所有輸入object檔案中的<code>.text</code> section請放到<code>.text</code>中</li>
+<li>所有輸入object檔案中的<code>.data</code> section請放到<code>.data</code>中</li>
+<li><code>.text</code> section 起始點為0x100</li>
+<li>由於<code>.</code>被設成0x200，以致於輸入object檔案的<code>.text</code>存放超過0x100 + 0x200的空間都有可能被後面的資料複寫掉。</li>
+<li><code>.text</code> section 結束後，請保留0x500的空間</li>
+<li><code>.text</code> section 最後0x500的位置為<code>.data</code> section的起始點</li>
+<li>最後一個輸入object檔案的<code>.data</code> section放入輸出object的<code>.data</code> section後，再從section中目前位置保留0x600的空間。</li>
+</ul>
+
+
+<p>手冊中有特別提到在section描述外面使用<code>.</code>需要特別注意的地方，它舉的例子如下：</p>
+
+<pre><code class="c">SECTIONS
+{
+  start_of_text = . ;
+  .text: { *(.text) }
+  end_of_text = . ;
+
+  start_of_data = . ;
+  .data: { *(.data) }
+    end_of_data = . ;
+}
+</code></pre>
+
+<p>這個範例在<code>.data</code>和<code>text</code>前後都加了一個symbol，數值為當時location counter的位置。看起來一切安好，然而如果輸入object檔案中有section不是<code>.data</code>也不是<code>.text</code>，例如放&quot;Hello world\n&quot;的<code>.rodata</code> (<a href="http://www.lisha.ufsc.br/teaching/os/exercise/hello.html%20%E4%BD%A0%E7%9F%A5%E9%81%93%E4%BD%A0%E5%AF%AB%E7%9A%84%22Hello%20world%22%E6%94%BE%E5%9C%A8%E4%BB%80%E9%BA%BC%E5%9C%B0%E6%96%B9%E5%98%9B%EF%BC%9F">參考資料</a>)，linker還是要把這些section放到輸出object檔案中。你覺得他會放在邊呢？手冊上說linker script中的symbol會被視為接在<strong>前一個</strong>section 後面，所以最後就會變成這樣：</p>
+
+<pre><code class="c">SECTIONS
+{
+  start_of_text = . ;
+  .text: { *(.text) }
+  end_of_text = . ;
+
+  start_of_data = . ;
+  .rodata: { *(.rodata) }
+  .data: { *(.data) }
+    end_of_data = . ;
+}
+</code></pre>
+
+<p>如此一來，如果你以為<code>start_of_data</code>就是<code>.data</code>開始位址，在你的程式中拿來做事，保證ＧＧ。因為<code>start_of_data</code>現在變成<code>.rodata</code>的起始位址了。</p>
+
+<p>要確保<code>start_of_data</code>一定在<code>.data</code> section前面的話，正確的做法是在<code>start_of_data = . ;</code>前面加上<code>. = .</code>強迫更新location counter，列出完整script如下：</p>
+
+<pre><code class="c">SECTIONS
+{
+  start_of_text = . ;
+  .text: { *(.text) }
+  end_of_text = . ;
+
+  . = . ;
+  start_of_data = . ;
+  .data: { *(.data) }
+    end_of_data = . ;
+}
+</code></pre>
+
+<p><a name="expr-op"></a></p>
+
+<h2>Operators</h2>
+
+<p>和C相容，請<a href="https://sourceware.org/binutils/docs/ld/Operators.html#Operators">自己看</a>，反正沒多少英文。</p>
+
+<p><a name="expr-eval ></a></p>
+
+<h2>計算結果</h2>
+
+<p>原來標題是「Evaluation」直接翻成評估，估算都很詭異。自作主張就是計算結果，反正這個章節就是在講這回事。</p>
+
+<p>linker很懶惰，所以不到要用的時候就不會去算expression的結果。以下是他的計算順序</p>
+
+<ul>
+<li>第一個section的起始位址，memory region size等一開始就需要取得的expression值</li>
+<li>當開始linker後才可以確定的expression，例如某個section內的symbol需要前面section處理完畢才能取得目前section的位置，然後才能開始計算裏面symbol相關的expression</li>
+<li>section size也要等該section link完畢才可能計算</li>
+<li>和<code>.</code>相關的expression同要等該section link完畢才可能計算</li>
+</ul>
+
+
+<p>由於有這樣的先後關係，如果你的script沒寫好可能就會遇到時間順序不同造成需要的expression裏面的element還沒計算完畢，然後你的linker就會噴錯誤出來。</p>
+
+<p>手冊的<a href="https://sourceware.org/binutils/docs/ld/Evaluation.html#Evaluation">範例</a>看不懂，不解釋了。</p>
+
+<p><a name="expr-sec"></a></p>
+
+<h2>Expression 計算結果和absolute/relative address的關係</h2>
+
+<p><strong> 這邊我不是很確定我有理解正確，請自行斟酌。另外看完後感覺上relative/absolute symbol和relative/absolute address是相同的東西，但是手冊上又沒有明講。所以我這邊語法會有點混亂。 </strong></p>
+
+<p>這邊要先定義兩個名詞才能理解這個section在講三小。列出如下</p>
+
+<ul>
+<li>relative symbol/address</li>
+<li>absolute symbol/address</li>
+</ul>
+
+
+<p>這兩個東西都是在講輸出object檔案的<code>SECTIONS</code>命令中的symbol或address。而這些symbol或 address可能宣告在<code>section</code>的裏面或外面。知道這樣的前提後，我們可以開始定義：</p>
+
+<ul>
+<li>relative symbol/address
+
+<ul>
+<li>這個symbol或address的值代表的是section到該symbol的offset</li>
+</ul>
+</li>
+<li>absolute symbol/address
+
+<ul>
+<li>這個symbol或address的值和section無關，而是寫死的</li>
+</ul>
+</li>
+</ul>
+
+
+<p>知道的這樣定義後，我們可以再問，然後呢？</p>
+
+<p>然後有相對特性的在relocate的時候只要更動section數值就好，而寫死的就沒有辦法動手腳。所以， relative symbol可以relocate而absolute symbol不行。</p>
+
+<p>還不是很瞭長怎麼樣嘛？先看手冊的的範例好了：</p>
+
+<pre><code class="c">SECTIONS
+{
+  . = 0x100;
+  __executable_start = 0x100;
+  .data :
+  {
+    . = 0x10;
+    __data_start = 0x10;
+    *(.data)
+  }
+  ...
+}
+</code></pre>
+
+<p>我們可以看到</p>
+
+<ul>
+<li>輸出object檔案的起始位址和<code>__executable_start</code>為0x100，這是一個<strong>absolute address/symbol</strong></li>
+<li><code>.data</code>的真正資料開始位置距離<code>.data</code>位置0x10，<code>__data_start</code>也是相同。這兩個是<strong>relative address/symbol</strong></li>
+</ul>
+
+
+<p>好啦，知道這兩個關係後，我們再回來討論計算symbol值的expression。由於linker script 命令處理回來的值有些是relative有些是absolution，所以在寫script的時候要注意。手冊描述的地方目前看不懂，懶得搞懂。不論如何，手冊提供了linker處理expresssion時對於absolute 和 relative的行為準則。</p>
+
+<ul>
+<li>計算結果為absolute
+
+<ul>
+<li>unary操作(如~0x11)absolute位置的address結果為absolute address</li>
+<li>binary操作(如A + B)，兩個operand都是absolute address的結果為absolute address</li>
+<li>binary操作(如A + B)，兩個operand都是數字的話的結果為absolute</li>
+<li>binary操作(如A + B)，兩個operand中一個是absolute address，另一個為數字的結果為absolute address</li>
+</ul>
+</li>
+<li>計算結果為relative，假設在同一個section下
+
+<ul>
+<li>unary操作(如~0x11) relative位置的address結果為relative address
+
+<ul>
+<li>binary操作(如A + B)，兩個operand都是relative address的結果為relative address</li>
+</ul>
+</li>
+<li>binary操作(如A + B)，一個operand是relative address另外一個是數字的結果為relative address</li>
+</ul>
+</li>
+<li>計算結果需要轉換後變成absolute address的情況
+
+<ul>
+<li>binary操作(如A + B)，兩個operand都是relative address，但是是不同的section，需要先轉成absolut address再操作，的結果為absolute address</li>
+<li>binary操作(如A + B)，兩個operand中一個是relative address，另外一個是absolute address，需要把relative address先轉成absolut address再操作，的結果為absolute address</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a href="http://chortle.ccsu.edu/java5/Notes/chap09B/ch09B_10.html">sub-expression</a>（就是express裏面合法的express如a+b-c，可以拆成a+b，他的結果再跟c相加，而a+b就是一個sub-expression），的處理absolute/relative規範如下：</p>
+
+<ul>
+<li>操作處理數字結果為數字</li>
+<li>比較(|| &amp;&amp;)的結果也是數字</li>
+<li>binary操作包含邏輯操作(如A + B)，兩個operand都是relative address的結果為數字</li>
+<li>binary操作包含邏輯操作(如A + B)，兩個operand都是absolute address的結果為數字</li>
+<li>不是以上的操作，兩個operand都是relative address的結果為relative address</li>
+<li>不是以上的操作，一個operand是relative address另外一個是數字的結果為relative address</li>
+<li>不是以上的操作，有absolute address的操作結果為absolute</li>
+</ul>
+
+
+<p>如果有需要，你可以使用<code>ABSOLUTE()</code>命令強迫section裏面的symbol值為absolutio，範例如下。</p>
+
+<pre><code class="c">SECTIONS
+{
+    .data : { *(.data) _edata = ABSOLUTE(.); }
+}
+</code></pre>
+
+<p><code>_edata</code>沒用<code>ABSOLUTE()</code>命令的話會是一個relative symbol，因為加了<code>ABSOLUTE()</code>命令所以linker把他視為absolution symbol。</p>
+
+<p><a name="expr-btfun"></a></p>
+
+<h2>內建函數</h2>
+
+<ul>
+<li><code>ABSOLUTE(expr)</code>
+
+<ul>
+<li>把expr內的結果視為absolute的值，通常會在section內使用，用了以後這個結果將會無法relocate</li>
+</ul>
+</li>
+<li><code>ADDR(section)</code>
+
+<ul>
+<li>取得section名稱的VMA</li>
+</ul>
+</li>
+</ul>
+
+
+<p>前面兩個命令可以用下面範例說明</p>
+
+<pre><code class="c">SECTIONS 
+{ 
+    ...
+  .output1 :
+  {
+    start_of_output_1 = ABSOLUTE(.);
+    ...
+  }
+  .output :
+  {
+    symbol_1 = ADDR(.output1);
+      symbol_2 = start_of_output_1;
+    ...
+  }
+  ... 
+}
+</code></pre>
+
+<p>這邊我們可以看到： <code>start_of_output_1</code>，<code>symbol_1</code>, 和<code>symbol_2</code>的值理論上是相同的。但是性質上<code>symbol_1</code>是relative，而其他兩個symbol是absolute。</p>
+
+<ul>
+<li><code>ALIGN(align)</code></li>
+<li><code>ALIGN(exp,align)</code>
+先講<code>ALIGN(exp,align)</code>，這個命令是計算expr後，回傳<code>align</code>位址後面第一個符合alignment的位址。而<code>ALIGN(align)</code>可以視為<code>ALIGN(., align)</code>，也就是說這個命令會回傳<code>.</code>的後面符合alignment的位址。手冊提供的範例如下，因為很容易望文生義，就不解釋了：</li>
+</ul>
+
+
+<pre><code class="c">SECTIONS 
+{ 
+    ...
+    .data ALIGN(0x2000): 
+  {
+        *(.data)
+        variable = ALIGN(0x8000);
+    }
+    ... 
+}
+</code></pre>
+
+<ul>
+<li><code>ALIGNOF(section名稱)</code>
+取得<code>section</code>後面符號alignment的位置。要注意的是section要已經被分配出來，否則linker會噴錯誤給你看。範例一樣容易望文生義，不解釋。</li>
+</ul>
+
+
+<pre><code class="c">SECTIONS
+{ 
+    ...
+  .output
+  {
+    LONG (ALIGNOF (.output))
+    ...
+  }
+    ... 
+}
+</code></pre>
+
+<ul>
+<li><code>BLOCK(exp)</code></li>
+</ul>
+
+
+<p>和<code>ALIGN()</code>相同。是舊版的linker使用的命令。</p>
+
+<ul>
+<li><code>DATA_SEGMENT_ALIGN(maxpagesize, commonpagesize)</code></li>
+<li><code>DATA_SEGMENT_END(exp)</code></li>
+<li><code>DATA_SEGMENT_RELRO_END(offset, exp)</code></li>
+</ul>
+
+
+<p><strong>看不懂，不想弄懂。跳過。</strong></p>
+
+<ul>
+<li><code>DEFINED(symbol)</code>
+如果symbol已經被收進symbol table就回傳1，否則回傳0。手冊示範如果沒定義該symbol就自己生一個如下。</li>
+</ul>
+
+
+<pre><code class="c">SECTIONS 
+{ 
+    ...
+  .text : 
+  {
+    begin = DEFINED(begin) ? begin : . ;
+    ...
+  }
+  ...
+}
+</code></pre>
+
+<ul>
+<li><p><code>LENGTH(region)</code>
+回傳你在<code>MEMORY</code>命令中設定的region size</p></li>
+<li><p><code>LOADADDR(section名稱)</code>
+回傳section的名稱的LMA位址</p></li>
+<li><p><code>LOG2CEIL(exp)</code>
+取exp的log，不知道用在啥子地方。</p></li>
+<li><p><code>MAX(exp1, exp2)</code>
+回傳exp1和exp2比較大的數值</p></li>
+<li><p><code>MIN(exp1, exp2)</code>
+回傳exp1和exp2比較小的數值</p></li>
+<li><p><code>NEXT(exp)</code>
+回傳exp計算結果的數值記憶體之後的可使用的空間。如果沒有使用<code>MEMORY</code>命令設定不連續的空間，這指令效果和<code>ALIGN</code>命令相同。</p></li>
+<li><p><code>ORIGIN(region名稱)</code>
+回傳你在<code>MEMORY</code>命令設定的region的起始位址</p></li>
+<li><p><code>SEGMENT_START(segment名稱, default)</code>
+回傳<code>segment</code>的起始位置。還記得ELF program header的segment？我不知道和這個是不是相同。<code>default</code>除非有透過<code>ld -T</code>參數更動，否則就是預設值。手冊沒有寫預設值是多少。但是從ld &ndash;verbose看到的使用範例是用在指定程式碼開始執行的地方。有沒有覺得0x400000很眼熟呢？不熟？那算了。</p></li>
+</ul>
+
+
+<pre><code class="c">  PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x400000)); . = SEGMENT_START("text-segment", 0x400000) + SIZEOF_HEADERS;
+  . = SEGMENT_START("ldata-segment", .);
+</code></pre>
+
+<ul>
+<li><code>SIZEOF(section名稱)</code>
+回傳section的size，如果該section還沒被分配，linker就吐錯誤給你看。
+下面的例子中的<code>symbol_1</code>和<code>symbol_2</code>的值是相同的。這蠻容易理解，我列出來主要是要讓大家多看例子。<code>.start</code>, <code>.end</code>的用法我看過好幾次。</li>
+</ul>
+
+
+<pre><code class="c">SECTIONS
+{ 
+  ...
+  .output 
+  {
+  .start = . ;
+  ...
+  .end = . ;
+  }
+  symbol_1 = .end - .start ;
+  symbol_2 = SIZEOF(.output);
+... 
+}
+</code></pre>
+
+<ul>
+<li><code>SIZEOF_HEADERS</code></li>
+<li><code>sizeof_headers</code>
+取得輸出object檔案的header size。如果你使用ELF格式，又有自行加programer header的話，ld會噴錯誤。原因是ld預期的是ELF規範的program header，因此放不下新增的program header。所以你有多的program header的話，請不要用這個指令。</li>
+</ul>
+
+
+<p><a name="imp"></a></p>
+
+<h2>Implicit Linker Scripts</h2>
+
+<p>linker吃的檔案處理順序如下</p>
+
+<p>1 object檔，開始link
+2 不是object檔，就當linker script吃進去
+3 不是object檔案也不是linker script檔案，噴錯誤然後 GG</p>
+
+<p>所以，Implicit Linker Script指的是項目2吃進來的script。linker會把這個當作目前linker script的補強，而不是取代。另外由於吃進來的script順序不同，可能會出現先讀入並link 三個object檔案後，才讀到Implicit Linker Script，所以這個Implicit Linker Script無法對已經link處理。</p>
+
+<p><a name="todo"></a></p>
+
+<h2>待釐清項目</h2>
+
+<ul>
+<li>dynamic symbol (不知道是三小)</li>
+<li>warning symbol (不知道是三小)</li>
+<li>constructor symbol (不知道是三小)</li>
+<li>3.6.6看不懂，跳過。</li>
+<li>dynamic loader</li>
+<li>Initialize section</li>
+<li>PT_INTERP和/lib64/ld-linux-x86-64.so.2的關係</li>
+<li>DATA_SEGMENT_ALIGN(maxpagesize, commonpagesize)和他的朋友們</li>
+<li>ld -M</li>
+</ul>
+
+
+<p><a name="ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="https://sourceware.org/binutils/docs/ld/Scripts.html#Scripts">GNU linker ld: Linker Scripts</a></li>
+<li><a href="http://www.slideshare.net/jserv/from-source-to-binary-how-gnu-toolchain-works">from Source to Binary: How GNU Toolchain Works</a></li>
+<li><a href="http://wiki.osdev.org/Linker_Scripts">Linker Scripts - OSDev Wiki</a></li>
+<li><a href="http://www.bravegnu.org/gnu-eprog/index.html">Embedded Programming with the GNU Toolchain</a></li>
+<li><a href="http://stackoverflow.com/questions/6666805/what-does-each-column-of-objdumps-symbol-table-mean">Stackoverflow: What does each column of objdump&rsquo;s Symbol table mean?</a></li>
+<li><a href="http://refspecs.linuxfoundation.org/elf/gabi4+/contents.html">System V Application Binary Interface - DRAFT - 24 April 2001</a></li>
+<li><a href="http://refspecs.linuxfoundation.org/">Linux Foundation: Referenced Specifications</a></li>
+<li><a href="http://refspecs.linuxfoundation.org/LSB_4.1.0/LSB-Core-generic/LSB-Core-generic/book1.html">Linux Standard Base Core Specification 4.1</a></li>
+<li><a href="http://stackoverflow.com/questions/6218384/virtual-and-physical-addresses-of-sections-in-elf-files">virtual and physical addresses of sections in elf files</a></li>
+<li><a href="http://www.cs.virginia.edu/~dww4s/articles/ld_linux.html">Understanding ld-linux.so.2</a></li>
+<li><a href="https://sourceware.org/binutils/docs/as/Symver.html">Using as: 7.11</a></li>
+<li><a href="http://www.lisha.ufsc.br/teaching/os/exercise/hello.html">The True Story of Hello World</a></li>
+<li><a href="http://ftp.gnu.org/old-gnu/Manuals/ld-2.9.1/html_chapter/ld_3.html#SEC13">Absolute symbol</a></li>
+<li><a href="http://chortle.ccsu.edu/java5/Notes/chap09B/ch09B_10.html">Sub-expression</a></li>
+<li><a href="http://en.wikipedia.org/wiki/.bss">Wikipedia: .bss</a></li>
+<li><a href="http://en.wikipedia.org/wiki/Code_segment">Wikipedia: Code segment</a></li>
+<li><a href="http://en.wikipedia.org/wiki/Data_segment">Wikipedia: Data segment</a></li>
+<li><a href="http://stackoverflow.com/questions/11196048/flags-in-objdump-output-of-object-file">stackoverflow: Flags in objdump output of object file</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

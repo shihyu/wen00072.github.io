@@ -1,0 +1,2090 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Linux | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/linux/atom.xml" rel="self"/>
+  <link href="http://wen00072.github.io/"/>
+  <updated>2016-07-25T12:05:47+08:00</updated>
+  <id>http://wen00072.github.io/</id>
+  <author>
+    <name><![CDATA[Wen Liao]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[使用strace找出程式缺少的檔案路徑]]></title>
+    <link href="http://wen00072.github.io/blog/2016/04/10/use-strace-to-trace-missing-files/"/>
+    <updated>2016-04-10T01:14:38+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/04/10/use-strace-to-trace-missing-files</id>
+    <content type="html"><![CDATA[<p>這算極短篇。在組裝別人軟體的時候，常常出現缺少檔案的錯誤，運氣不好的不會跟你說缺少的檔案的期待路徑；運氣更差的就會連錯誤都不印，直接程式crash。我後來知道strace之後，才發覺它可以結省很多印log和trace程式碼的時間。</p>
+
+<p>這次就以前一篇執行openocd遇到的問題為例：第一次編譯openocd後，直接執行會出現找不到openocd.cfg檔案。經過一些試誤後才有上一篇整理出來的指令。</p>
+
+<p>錯誤訊息如下</p>
+
+<pre><code>$ openocd 
+Open On-Chip Debugger 0.10.0-dev-00250-g9c37747 (2016-04-07-22:20)
+Licensed under GNU GPL v2
+For bug reports, read
+    http://openocd.org/doc/doxygen/bugs.html
+embedded:startup.tcl:60: Error: Can't find openocd.cfg
+in procedure 'script' 
+at file "embedded:startup.tcl", line 60
+Error: Debug Adapter has to be specified, see "interface" command
+embedded:startup.tcl:60: Error: 
+in procedure 'script' 
+at file "embedded:startup.tcl", line 60
+</code></pre>
+
+<p>用strace 觀察輸出訊息如下：</p>
+
+<pre><code>$ strace -f openocd 2&gt;&amp;1  | grep cfg
+open("openocd.cfg", O_RDONLY)           = -1 ENOENT (No such file or directory)
+open("/home/asdf/.openocd/openocd.cfg", O_RDONLY) = -1 ENOENT (No such file or directory)
+open("/usr/local/share/openocd/site/openocd.cfg", O_RDONLY) = -1 ENOENT (No such file or directory)
+open("/usr/local/share/openocd/scripts/openocd.cfg", O_RDONLY) = -1 ENOENT (No such file or directory)
+write(2, "embedded:startup.tcl:60: Error: "..., 118embedded:startup.tcl:60: Error: Can't find openocd.cfg
+</code></pre>
+
+<p>從輸出訊息可以知道，openocd會依下面的順序讀取openocd.cfg</p>
+
+<ul>
+<li>目前目錄的openocd.cfg</li>
+<li>~/.openocd/openocd.cfg</li>
+<li>/usr/local/share/openocd/site/openocd.cfg</li>
+<li>/usr/local/share/openocd/scripts/openocd.cfg</li>
+</ul>
+
+
+<p>所以接下來就是在openocd的原始碼中挑和你開發target可以使用config 檔案，放入~/.openocd、改成openocd.cfg。當然事情沒那麼簡單，解掉這個問題接下來還會有一些缺少檔案的問題，一樣靠strace就可以搞定。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[關於GNU Inline Assembly]]></title>
+    <link href="http://wen00072.github.io/blog/2015/12/10/about-inline-asm/"/>
+    <updated>2015-12-10T22:16:49+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/12/10/about-inline-asm</id>
+    <content type="html"><![CDATA[<p>以前稍微接觸過GNU Inline Assembly，對於那些奇怪的符號總是覺得匪夷所思。這次找時間把他整理一下。雖然釐清了一些觀念，不過卻產生更多的疑惑，也許以後有機會看到範例會慢慢有感覺吧。</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#ia-preface">前言</a></li>
+<li><a href="#ia-env">測試環境</a></li>
+<li><a href="#ia-syntax">語法</a>
+
+<ul>
+<li><a href="#ia-output">Output operands</a></li>
+<li><a href="#ia-input">Input operands</a></li>
+<li><a href="#ia-clo-reg">Clobbered registers list</a></li>
+<li><a href="#ia-constr">Constraints</a></li>
+</ul>
+</li>
+<li><a href="#ia-ref">參考資料</a></li>
+</ul>
+
+
+<p><a name="ia-preface"></a></p>
+
+<h2>前言</h2>
+
+<p>我自己對於GNU Inline Assembly的看法。</p>
+
+<ul>
+<li>編譯器 夠聰明，所以暫存器分配可以安心交給編譯器處理。也就是說語法上面要處理這塊。</li>
+<li>暫存器、變數有些資訊仍然要讓編譯器知道，讓編譯器產生object binary遵守這樣的規則，如
+
+<ul>
+<li>這個operand是一個暫存器</li>
+<li>這個operand是一塊記憶體</li>
+<li>這個operand是浮點常數</li>
+<li>&hellip;</li>
+</ul>
+</li>
+<li>不想讓編譯器幫你安排暫存器，而是在Inline Assembly指定暫存器的話，就要明確的列出來。讓編譯器知道這些暫存器有被改過資料，進而針對這些暫存器做適當的處理。</li>
+</ul>
+
+
+<p><a name="ia-env"></a></p>
+
+<h2>測試環境</h2>
+
+<p>我使用ARMv7為主的Banana Pi開發版加上Lubuntu 14.04作為測試環境。</p>
+
+<pre><code>$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.3 LTS
+Release:    14.04
+Codename:   trusty
+
+$ dmesg
+...
+[    0.000000] Linux version 3.4.90 (bananapi@lemaker) (gcc version 4.6.3 (Ubuntu/Linaro 4.6.3-1ubuntu5) ) #2 SMP PREEMPT Tue Aug 5 14:11:40 CST 2014
+[    0.000000] CPU: ARMv7 Processor [410fc074] revision 4 (ARMv7), cr=10c5387d
+...
+
+$ gcc -v
+...
+Target: arm-linux-gnueabihf
+...
+gcc version 4.8.4 (Ubuntu/Linaro 4.8.4-2ubuntu1~14.04) 
+</code></pre>
+
+<p><a name="ia-syntax"></a></p>
+
+<h2>語法</h2>
+
+<p>inline assembler關鍵字是<code>asm</code>，不過<code>__asm__</code>也可以使用(<a href="#ia_ps0">註</a>)。</p>
+
+<p>根據目前(Dec/2015)的<a href="https://gcc.gnu.org/onlinedocs/gcc/index.html#Top">gcc手冊</a>，inline assembler有分為<code>basic</code>和<code>extended</code>兩種。雖然我使用的平台是gcc 4.8.4，而且gcc 4.8.5<a href="https://gcc.gnu.org/onlinedocs/gcc-4.8.5/gcc/index.html#Top">手冊</a>(官方網站上沒有4.8.4手冊)並沒有提到這個部份。但是目前<strong>語法上</strong>測試的確沒有問題，但是有些說明上面卻很難驗證是否可以套用到4.8.5上(例如最佳化的說明、需要注意常犯的錯誤)，請自行斟酌。</p>
+
+<p>以下是整理自最新的手冊說明，請自行斟酌您使用的gcc版本是否有符合。</p>
+
+<h3>Basic inline assembler</h3>
+
+<pre><code class="c">     [ volatile ] asm("Assembler Template");
+</code></pre>
+
+<p>以下是整理自最新(Dec/2015)的手冊說明節錄，請自行斟酌您使用的gcc版本是否有符合。</p>
+
+<ul>
+<li>basic inline assembler 預設就是volatile</li>
+<li>基本上編譯器只是把引號內的東西抄錄，所以只要組譯器支援的語法，就可以寫入Assembler Template內</li>
+<li>和extended inline assembler的差異
+
+<ul>
+<li>extended inline assembler 只允許在函數內使用</li>
+<li>有<code>naked</code>屬性的函數必須使用basic inline assembler(見<a href="#ia_ps1">註解</a>)</li>
+<li>basic inline assembler就是把template內的字串作為組合語言組譯。而<code>%</code>字元在extended inline assembler有特別意義，然而有些組合語言如x86中<code>%</code>是暫存器語法的一部份。以至於<code>%</code>字元要在extended inline assembler中改為<code>%%</code>才是真正的意思，舉個例子<code>%eax</code>-><code>%%eax</code></li>
+</ul>
+</li>
+<li>有要使用C 語言的資料，使用extended inline assembler比較妥當</li>
+<li>GCC 最佳化時是有可能把你的inline assembler幹掉或是和你想的不一樣，請注意</li>
+<li>你不可以從一個<code>asm(..)</code>裏面跳到另外一個<code>asm(..)</code>的label</li>
+</ul>
+
+
+<p>最簡單的<del>廢話</del>範例如下
+<code>c
+    asm("nop"); /* 啥事都不要做 */
+</code></p>
+
+<p>在沒有使用C 語言的變數下，就和一般的組合語言沒有差太多。
+更複雜一點的例子可以看<a href="https://github.com/embedded2014/rtenv/blob/master/kernel.c#L10">rtenv</a>裏面的使用方式：</p>
+
+<pre><code class="c">size_t strlen(const char *s) __attribute__ ((naked));
+size_t strlen(const char *s)
+{
+    asm(
+        "    sub  r3, r0, #1            \n"
+        "strlen_loop:               \n"
+        "    ldrb r2, [r3, #1]!        \n"
+        "    cmp  r2, #0                \n"
+        "   bne  strlen_loop        \n"
+        "    sub  r0, r3, r0            \n"
+        "    bx   lr                    \n"
+        :::
+    );
+}
+</code></pre>
+
+<p>要注意<code>__attribute__ ((naked));</code>是有意義的。這是為何這段範例沒有直接指名用到C 語言函式變數名稱的關鍵點。有興趣請看<a href="https://gcc.gnu.org/onlinedocs/gcc/ARM-Function-Attributes.html#ARM-Function-Attributes">這邊</a>，請直接找字串<code>naked</code>。</p>
+
+<h3>Extended inline assembler</h3>
+
+<pre><code class="c">     asm [volatile] ( AssemblerTemplate
+                        : OutputOperands   // optional
+                      [ : InputOperands    // optional
+                      [ : Clobbers ]       // optional
+                      ])
+</code></pre>
+
+<p>Assembler Template基本上就是你要寫的組語加上 Inline Assembler 專用的符號。要注意的是，在編譯的過程中，你寫的inline assembler可能由於最佳化考慮不會被組譯。如果你確認你inline assembler一定要被組譯，請加上<code>volatile</code> keyword。</p>
+
+<p>Assembler 專用的符號節錄如下：</p>
+
+<table  style="width:100%">
+    <tr>
+        <th>符號</th>
+        <th>說明</th>
+    </tr>
+    <tr>
+        <td width=15%">%%</td>
+        <td>單一%字元</td>
+    </tr>
+    <tr>
+        <td>%{</td>
+        <td>單一{字元</td>
+    </tr>
+    <tr>
+        <td>%}</td>
+        <td>單一}字元</td>
+    </tr>
+    <tr>
+        <td>|{</td>
+        <td>單一|字元</td>
+    </tr>
+    <tr>
+        <td>%=</td>
+        <td>只知道並驗證過會產生唯一的數字。用途部份看不懂，英文真是奧妙的東西啊。</td>
+    </tr>
+</table>
+
+
+<p></p>
+
+<p>AssemblerTemplate</p>
+
+<p>由於<a href="#ia-preface">前言</a>提到的三項個人猜測，造成inline assembler要使用C 語言變數時語法會出現很多令人眼花撩亂的符號。</p>
+
+<p>由於編譯器提供協助分配暫存器和記憶體，也就是說需要有對應的語法指定目前指令的operand是什麼。GCC 有兩種方式指定，分別是</p>
+
+<ul>
+<li>編號指定，從零開始編號</li>
+<li>Symbolic name指定: GCC 3.1以後支援<a href="https://gcc.gnu.org/onlinedocs/gcc-4.8.5/gcc/Extended-Asm.html#Extended-Asm">出處</a></li>
+</ul>
+
+
+<p>分別給個範例讓各位感受一下</p>
+
+<h4>編號指定，從零開始編號</h4>
+
+<p>這邊<code>%0</code>, <code>%1</code>就是編號。後面operand可以看到就是指定變數、以及變數的限制。這邊簡單解釋一下<code>=</code>表示這是一個輸出、而<code>r</code>表示變數要放在暫存器中、<code>m</code>表示變數是放在記憶體中。有興趣比對編譯出來的binary反組譯時的組合語言請看<a href="#ia_ps2">這邊</a>。不過編號和指令中的operand似乎很隨意，我沒有看到特殊規範。只能交叉比對assembler template和input/output operands才能看出端倪。我猜更複雜的情況你還要比對反組譯出來的結果。</p>
+
+<pre><code class="c">#include &lt;stdio.h&gt;
+
+int main(void)
+{
+    int var1 = 12;
+    int var2 = 10;
+
+    asm("mov %0, %1 \n  \
+         add %1, %0, $1" : "=r"(var1), "=r"(var2) : "r"(var2), "r"(var1):);
+    printf("var1 = %d, var2 = %d\n", var1, var2);
+
+    asm("ldr r5, %0 \n":           : "m"(var1): "r5");
+    asm("str r4, %0"   : "=m"(var2):          : "r4");
+    return 0;
+}
+</code></pre>
+
+<h4>Symbolic name指定</h4>
+
+<p>編號的缺點就是可讀性比較差，所以gcc 3.1出現使用symbolic name的方式。至於那一個比較好，看你自己習慣。</p>
+
+<p>直接把上面的範例更改一下。<a href="https://gcc.gnu.org/onlinedocs/gcc-4.8.5/gcc/Extended-Asm.html#Extended-Asm">GCC 4.8.5手冊</a>上面說symbolic name隨便取，甚至和變數同名稱都可以，<strong>只要單一asm(&hellip;)內的 symbolic name不要重複就好</strong>。有興趣比對編譯出來的binary反組譯時的組合語言請看<a href="#ia_ps3">這邊</a>。</p>
+
+<pre><code class="c">#include &lt;stdio.h&gt;
+
+int main(void)
+{
+    int var1 = 12;
+    int var2 = 10;
+
+    asm("mov %[my_var1], %[my_var2] \n  \
+         add %[my_var3], %[my_var4], $1" : 
+            [my_var1] "=r" (var1), [my_var3] "=r" (var2) :
+            [my_var2] "r"  (var2), [my_var4] "r"  (var1) :);
+    printf("var1 = %d, var2 = %d\n", var1, var2);
+
+    asm("ldr r5, %[my_var1] \n":: [my_var1] "m"(var1): "r5");
+    asm("str r4, %[my_var1]": [my_var1] "=m" (var2):: "r4");
+    return 0;
+}
+</code></pre>
+
+<p>接下來來看每個欄位吧。</p>
+
+<p><a name="ia-output"></a></p>
+
+<h4>Output operands</h4>
+
+<pre><code class="c">    [ [asmSymbolicName] ] constraint (cvariablename)
+</code></pre>
+
+<p><code>[asmSymbolicName]</code> 是GCC 3.1以後支援語法，如前所述，不用Symbolic Name就用編號方式對應assembler template operand。</p>
+
+<p>指定結果要存在C 語言中的那個變數。要注意的除了要設定對的資訊（constraints，<a href="#ia-constr">下面</a>會節錄) 以外，operand的prefix一定要是<code>=</code>或<code>+</code>這兩個constraint。</p>
+
+<p>隨便舉幾個範例</p>
+
+<ul>
+<li><code>=r(var1)</code>：變數請寫入並放在暫存器中</li>
+<li><code>=m(var1)</code>：變數請寫入並存到記憶體中</li>
+</ul>
+
+
+<p><a name="ia-input"></a></p>
+
+<h4>Input operands</h4>
+
+<pre><code class="c">    [ [asmSymbolicName] ] constraint (cvariablename)
+</code></pre>
+
+<p><code>[asmSymbolicName]</code> 是GCC 3.1以後支援語法，如前所述，不用Symbolic Name就用編號方式對應assembler template operand。</p>
+
+<p>指定要從在C 語言中的那個變數取出資料。主要是要設定對的資訊（constraints，<a href="#ia-constr">下面</a>會節錄) 。</p>
+
+<ul>
+<li><code>r(var1)</code>：變數請放在暫存器中</li>
+<li><code>m(var1)</code>：變數是在記憶體中</li>
+</ul>
+
+
+<p><a name="ia-clo-reg"></a></p>
+
+<h4>Clobbered registers list</h4>
+
+<p>先講結論，在<code>asm("語法")</code>中明確地指定暫存器名稱的話，要在這邊列出。</p>
+
+<p>現在我會習慣查單字。<code>Clobbered</code>查英文單字會發現就是把東西用力地砸毀。所以翻譯成中文就是「砸爛的暫存器列表」。什麼是爛掉的暫存器？就是本節前面的結論囉。</p>
+
+<p>另外從Dec/2015的gcc 手冊還有找到下面<a href="https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html#Clobbers">語法</a>，一樣請注意版本問題</p>
+
+<table  style="width:100%">
+    <tr>
+        <th>符號</th>
+        <th>說明</th>
+    </tr>
+    <tr>
+        <td width="15%">&#8220;cc&#8221;</td>
+        <td>和狀態有關的flag暫存器會被修改</td>
+    </tr>
+    <tr>
+        <td>&#8220;memory&#8221;</td>
+        <td>這段組合語言會讀寫列出operand以外的記憶體內容，因此編譯器會視情況備份暫存器或讀寫記憶體</td>
+    </tr>
+</table>
+
+
+<p><a name="ia-constr"></a></p>
+
+<h3>Constraints</h3>
+
+<pre><code class="c">&lt;Constraints&gt;       ::= &lt;Constraint Modifier&gt; &lt;Other Constraints&gt; | &lt;Other Constraints&gt;
+&lt;Other Constraints&gt; ::= &lt;Simple Constraints&gt; | &lt;Machine Constraints&gt;
+
+; /* 以上BNF是我整理的，terminal symbol請自行看手冊 */
+</code></pre>
+
+<p>節錄整理我<del>看得懂</del>感興趣的部份。</p>
+
+<h5>Simple Constraints</h5>
+
+<table  style="width:100%">
+    <tr>
+        <th>符號</th>
+        <th>說明</th>
+    </tr>
+    <tr>
+        <td width="15%">空白字元</td>
+        <td>會被忽略，排版用</td>
+    </tr>
+    <tr>
+        <td>m</td>
+        <td>operand 存放在記憶體中</td>
+    </tr>
+    <tr>
+        <td>r</td>
+        <td>operand 將被放在暫存器中</td>
+    </tr>
+    <tr>
+        <td>i</td>
+        <td>operand 是一個整數常數，該常數包含下面的情形(symbolic name)：`#define MAX_LINE (32)`</td>
+    </tr>
+    <tr>
+        <td>n</td>
+        <td>operand 是一個整數常數，只允許填入數字</td>
+    </tr>
+    <tr>
+        <td>E</td>
+        <td>operand 是一個浮點數常數，不清楚和`F`的差異</td>
+    </tr>
+    <tr>
+        <td>F</td>
+        <td>operand 是一個浮點數常數，不清楚和`E`的差異</td>
+    </tr>
+    <tr>
+        <td>g</td>
+        <td>operand 存在暫存器(r)或是記憶體內(m)，或是這是一個整數常數</td>
+    </tr>    
+    <tr>
+        <td>X</td>
+        <td>不用檢查operand</td>
+    </tr>
+</table>
+
+
+<p>　　</p>
+
+<p>你可以使用組合技如<code>"rim"</code>，如果這樣寫的話，意思是要編譯器幫你挑一個最適合的方式處理對應於assembler template內的operand。
+　　</p>
+
+<h5>Constraint Modifier</h5>
+
+<table  style="width:100%">
+    <tr>
+        <th>符號</th>
+        <th>說明</th>
+    </tr>
+    <tr>
+        <td width="15%">=</td>
+        <td>表示這是一個write only的operand，必須為contraint開始字元。</td>
+    </tr>
+    <tr>
+        <td>+</td>
+        <td>表示這個 operand 在指令中是同時被讀寫的，必須為contraint開始字元。</td>
+    </tr>
+    <tr>
+        <td>&</td>
+        <td>該operand 為earlyclobber。earlyclobber就是在instruction讀取該operand前，該operand會被寫入。雖然如此，到底是多久前？是和data hazard有關嘛？還是跟資料一致性有關？或者是和編譯器 最佳化造成非預期結果有關？真是一團謎<font color="red">完全搞不懂做啥用，也不清楚使用時機。</font><a href="http://lxr.free-electrons.com/source/arch/arm/include/asm/uaccess.h#L364">這邊有範例</a>，一樣搞不懂為什麼要有+, &的modifier</td>
+    </tr>
+    <tr>
+        <td>%</td>
+        <td>該operand 可以讓編譯器 決定這個operand是否和後面的operand交換(commutative)，<font color="red">完全搞不懂做啥用</font></td>
+    </tr>
+</table>
+
+
+<p>　　</p>
+
+<h5>ARM 專用的Constraint</h5>
+
+<p>我參考的是gcc 4.8.5手冊(因為和測試環境的gcc版本最接近)，可能有版本的問題，這些我都沒有做實驗測試，請自行斟酌。</p>
+
+<table  style="width:100%">
+    <tr>
+        <th>符號</th>
+        <th>說明(一般模式)</th>
+    </tr>
+    <tr>
+        <td width="20%">w</td>
+        <td width="80%">VFP 浮點運算</td>
+    </tr>
+    <tr>
+        <td>G</td>
+        <td>浮點運算的0.0</td>
+    </tr>
+    <tr>
+        <td>I</td>
+        <td>8 bit正整數</td>
+    </tr>
+    <tr>
+        <td>K</td>
+        <td>I contraint 的invert (一的補數)，Wen: 不知道為什麼要扯到I constraint？</td>
+    </tr>
+    <tr>
+        <td>L</td>
+        <td>I contraint 的負數 (二的補數)，Wen: 不知道為什麼要扯到I constraint？</td>
+    </tr>
+    <tr>
+        <td>M</td>
+        <td>0 ~ 32的正整數</td>
+    </tr>
+    <tr>
+        <td>Q</td>
+        <td>要參考的記憶體位址存放在一個暫存器內</td>
+    </tr>
+    <tr>
+        <td>R</td>
+        <td>operand是一個const pool內的東西，不要問我const pool是啥，估狗到都和Java有關</td>
+    </tr>
+    <tr>
+        <td>S</td>
+        <td>operand 目前檔案中.text內的一個symbol</td>
+    </tr>
+    <tr>
+        <td>Uv</td>
+        <td>VFP load/store 指令可存取的記憶體</td>
+    </tr>
+    <tr>
+        <td>Uy</td>
+        <td>iWMMXt load/store 指令可存取的記憶體</td>
+    </tr>
+    <tr>
+        <td>Uq</td>
+        <td>ARMv4 ldrsb 指令可存取的記憶體</td>
+    </tr>
+</table>
+
+
+<p></p>
+
+<p>完整列表在這邊，要注意的是2015年12月的手冊又多了一些新的contstraint。請自行參考。</p>
+
+<ul>
+<li><a href="https://gcc.gnu.org/onlinedocs/gcc-4.8.5/gcc/Machine-Constraints.html#Machine-Constraints">gcc 4.8.5: Constraints for Particular Machines</a>
+
+<ul>
+<li>請自行參考你的硬體平台</li>
+</ul>
+</li>
+<li><a href="https://gcc.gnu.org/onlinedocs/gcc/Machine-Constraints.html#Machine-Constraints">Dec/2015手冊: 6.44.4.4 Constraints for Particular Machines</a></li>
+</ul>
+
+
+<p><a name="ia-ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>中文
+
+<ul>
+<li><a href="http://www.study-area.org/cyril/opentools/opentools/x969.html">(BIG5)用Open Source工具開發軟體: 新軟體開發關念: Chapter 4. GNU Compiler Collection</a>
+
+<ul>
+<li>題外話，寫這位文件的作者個人非常佩服，但是網路上似乎關於這位作者只有這份文件。真是神祕的人物</li>
+</ul>
+</li>
+<li><a href="http://nano-chicken.blogspot.tw/2010/12/inline-assembly.html">Nano雞排: Inline Assembly</a></li>
+</ul>
+</li>
+<li>英文
+
+<ul>
+<li><a href="https://gcc.gnu.org/onlinedocs/gcc/Using-Assembly-Language-with-C.html#Using-Assembly-Language-with-C">gcc: How to Use Inline Assembly Language in C Code</a>
+
+<ul>
+<li><a href="https://gcc.gnu.org/onlinedocs/gcc/index.html#Top">手冊</a>上寫是給<code>gcc 6.0</code>，我目前從GGG release網站上看到<a href="https://gcc.gnu.org/releases.html">最新版本</a>是5.3，怪。</li>
+<li>為什麼列出這個，因為我原本找的gcc-4.8.5 對於assembler template說明沒有特別列出gcc 支援的inline assembler符號。另外這份的文件結構的確比4.8.5清楚。</li>
+</ul>
+</li>
+<li><a href="https://gcc.gnu.org/onlinedocs/gcc-4.8.5/gcc/Extended-Asm.html#Extended-Asm">gcc-4.8.5: Assembler Instructions with C Expression Operands</a></li>
+<li><a href="https://gcc.gnu.org/onlinedocs/gcc-4.8.5/gcc/Constraints.html#Constraints">gcc-4.8.5: Constraints for asm Operands</a></li>
+<li><a href="http://www.ethernut.de/en/documents/arm-inline-asm.html">ARM GCC Inline Assembler Cookbook</a>
+
+<ul>
+<li>相當推荐，不論是給的說明和範例，更厲害的是關於contraint部份寫的比手冊清楚，一樣我沒測過就是了。</li>
+</ul>
+</li>
+<li><a href="http://ericw.ca/notes/a-tiny-guide-to-gcc-inline-assembly.html">A Tiny Guide to GCC Inline Assembly</a></li>
+<li><a href="https://www.ibiblio.org/gferg/ldp/GCC-Inline-Assembly-HOWTO.html">GCC-Inline-Assembly-HOWTO</a></li>
+<li><a href="http://wiki.osdev.org/Inline_Assembly">OSDev: Inline Assembly</a></li>
+<li><a href="http://asm.sourceforge.net/articles/rmiyagi-inline-asm.txt">Introduction to GCC inline assembler</a>
+
+<ul>
+<li>似乎有點古老。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<h2>附錄</h2>
+
+<p><a name="ia_ps0"></a></p>
+
+<ul>
+<li>C 語言標準有提到編譯器可以使用<code>asm</code> keyword，而且沒有定義語法。有興趣可以找<code>C11</code>、<code>C99</code>、<code>C89</code>的標準，直接搜尋<code>asm</code>就可以看到了。</li>
+</ul>
+
+
+<hr />
+
+<p><a name="ia_ps1"></a></p>
+
+<ul>
+<li><code>naked</code>使用basic inline assembler和extended inline assembler比較</li>
+</ul>
+
+
+<p>下面兩個函數，<code>strcmp1</code>沒有任何extended inline assembler而<code>strcmp2</code>硬塞了一個下去：
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="kt">int</span> <span class="nf">strcmp1</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span> <span class="o">&lt;</span><span class="n">strong</span><span class="o">&gt;</span><span class="n">attribute</span><span class="o">&lt;/</span><span class="n">strong</span><span class="o">&gt;</span> <span class="p">((</span><span class="kr">naked</span><span class="p">));</span>
+</span><span class='line'><span class="kt">int</span> <span class="nf">strcmp1</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">asm</span><span class="p">(</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="nl">strcmp_lop1</span><span class="p">:</span>                <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">ldrb</span>    <span class="n">r2</span><span class="p">,</span> <span class="p">[</span><span class="n">r0</span><span class="p">],</span><span class="err">#</span><span class="mi">1</span>     <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">ldrb</span>    <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r1</span><span class="p">],</span><span class="err">#</span><span class="mi">1</span>     <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">cmp</span>     <span class="n">r2</span><span class="p">,</span> <span class="err">#</span><span class="mi">1</span>          <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">it</span>      <span class="n">hi</span>              <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">cmphi</span>   <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>          <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">beq</span>     <span class="n">strcmp_lop1</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>    <span class="n">sub</span>     <span class="n">r0</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">bx</span>      <span class="n">lr</span>              <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">:::</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'><span class="p">}</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">int</span> <span class="n">strcmp2</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span> <span class="o">&lt;</span><span class="n">strong</span><span class="o">&gt;</span><span class="n">attribute</span><span class="o">&lt;/</span><span class="n">strong</span><span class="o">&gt;</span> <span class="p">((</span><span class="kr">naked</span><span class="p">));</span>
+</span><span class='line'><span class="kt">int</span> <span class="nf">strcmp2</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>        <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">asm</span><span class="p">(</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="nl">strcmp_lop2</span><span class="p">:</span>                <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">ldrb</span>    <span class="n">r2</span><span class="p">,</span> <span class="p">[</span><span class="n">r0</span><span class="p">],</span><span class="err">#</span><span class="mi">1</span>     <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">ldrb</span>    <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r1</span><span class="p">],</span><span class="err">#</span><span class="mi">1</span>     <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">cmp</span>     <span class="n">r2</span><span class="p">,</span> <span class="err">#</span><span class="mi">1</span>          <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">it</span>      <span class="n">hi</span>              <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">cmphi</span>   <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>          <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">mov</span>     <span class="o">%</span><span class="mi">1</span><span class="p">,</span> <span class="err">$</span><span class="mi">1</span> <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">beq</span>     <span class="n">strcmp_lop2</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>    <span class="n">sub</span>     <span class="n">r0</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">bx</span>      <span class="n">lr</span>              <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">:&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="o">=</span><span class="n">r</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;(</span><span class="n">i</span><span class="p">)</span><span class="o">::</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>我們可以比較一下下面兩個函數最後編譯出來的指令，<code>strcmp2</code>顯然和我們預期的差很多。
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="mf">000083f</span><span class="mi">4</span> <span class="o">&lt;</span><span class="n">strcmp1</span><span class="o">&gt;:&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">int</span> <span class="n">strcmp1</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span> <span class="o">&lt;</span><span class="n">strong</span><span class="o">&gt;</span><span class="n">attribute</span><span class="o">&lt;/</span><span class="n">strong</span><span class="o">&gt;</span> <span class="p">((</span><span class="kr">naked</span><span class="p">));</span>
+</span><span class='line'><span class="kt">int</span> <span class="nf">strcmp1</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="n">b</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">asm</span><span class="p">(</span>
+</span><span class='line'>    <span class="mf">83f</span><span class="mi">4</span><span class="o">:</span>   <span class="n">f810</span> <span class="mi">2</span><span class="n">b01</span>   <span class="n">ldrb</span><span class="p">.</span><span class="n">w</span>  <span class="n">r2</span><span class="p">,</span> <span class="p">[</span><span class="n">r0</span><span class="p">],</span> <span class="err">#</span><span class="mi">1</span>
+</span><span class='line'>    <span class="mf">83f</span><span class="mi">8</span><span class="o">:</span>   <span class="n">f811</span> <span class="mi">3</span><span class="n">b01</span>   <span class="n">ldrb</span><span class="p">.</span><span class="n">w</span>  <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r1</span><span class="p">],</span> <span class="err">#</span><span class="mi">1</span>
+</span><span class='line'>    <span class="mf">83f</span><span class="nl">c</span><span class="p">:</span>   <span class="mi">2</span><span class="n">a01</span>        <span class="n">cmp</span> <span class="n">r2</span><span class="p">,</span> <span class="err">#</span><span class="mi">1</span>
+</span><span class='line'>    <span class="mf">83f</span><span class="nl">e</span><span class="p">:</span>   <span class="n">bf88</span>        <span class="n">it</span>  <span class="n">hi</span>
+</span><span class='line'>    <span class="mi">8400</span><span class="o">:</span>   <span class="mi">429</span><span class="n">a</span>        <span class="n">cmphi</span>   <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>
+</span><span class='line'>    <span class="mi">8402</span><span class="o">:</span>   <span class="n">d0f7</span>        <span class="n">beq</span><span class="p">.</span><span class="n">n</span>   <span class="mf">83f</span><span class="mi">4</span> <span class="o">&lt;</span><span class="n">strcmp1</span><span class="o">&gt;</span>
+</span><span class='line'>    <span class="mi">8404</span><span class="o">:</span>   <span class="n">eba2</span> <span class="mo">0003</span>   <span class="n">sub</span><span class="p">.</span><span class="n">w</span>   <span class="n">r0</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>
+</span><span class='line'>    <span class="mi">8408</span><span class="o">:</span>   <span class="mi">4770</span>        <span class="n">bx</span>  <span class="n">lr</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">beq</span>     <span class="n">strcmp_lop1</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>    <span class="n">sub</span>     <span class="n">r0</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">bx</span>      <span class="n">lr</span>              <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">:::</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>    <span class="mi">840</span><span class="nl">a</span><span class="p">:</span>   <span class="mi">4618</span>        <span class="n">mov</span> <span class="n">r0</span><span class="p">,</span> <span class="n">r3</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="mo">0000</span><span class="mi">840</span><span class="n">c</span> <span class="o">&lt;</span><span class="n">strcmp2</span><span class="o">&gt;:</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">beq</span>     <span class="n">strcmp_lop2</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>    <span class="n">sub</span>     <span class="n">r0</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>      <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span>   <span class="n">bx</span>      <span class="n">lr</span>              <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span>
+</span><span class='line'>        <span class="o">:&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="o">=</span><span class="n">r</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;(</span><span class="n">i</span><span class="p">)</span><span class="o">::</span>
+</span><span class='line'>    <span class="p">);</span>
+</span><span class='line'><span class="p">}</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;---</span>
+</span><span class='line'><span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="n">a</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;ia_ps2&quot;</span><span class="o">&amp;</span><span class="n">gt</span><span class="p">;</span><span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="o">/</span><span class="n">a</span><span class="o">&amp;</span><span class="n">gt</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">*</span> <span class="err">範例一的反組譯節錄</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="err">$</span> <span class="n">objdump</span> <span class="o">-</span><span class="n">d</span> <span class="o">-</span><span class="n">S</span> <span class="n">asm</span>
+</span><span class='line'><span class="o">&amp;</span><span class="n">hellip</span><span class="p">;</span>
+</span><span class='line'><span class="mf">000083f</span><span class="mi">4</span> <span class="o">&lt;</span><span class="n">main</span><span class="o">&gt;:&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">h1</span><span class="o">&gt;</span><span class="n">include</span> <span class="o">&amp;</span><span class="n">lt</span><span class="p">;</span><span class="n">stdio</span><span class="p">.</span><span class="n">h</span><span class="o">&gt;&lt;/</span><span class="n">h1</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">int</span> <span class="n">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'><span class="o">&amp;</span><span class="n">hellip</span><span class="p">;</span>
+</span><span class='line'>    <span class="kt">int</span> <span class="n">var1</span> <span class="o">=</span> <span class="mi">12</span><span class="p">;</span>
+</span><span class='line'>    <span class="mf">83f</span><span class="nl">a</span><span class="p">:</span>   <span class="mi">230</span><span class="n">c</span>        <span class="n">movs</span>    <span class="n">r3</span><span class="p">,</span> <span class="err">#</span><span class="mi">12</span>
+</span><span class='line'>    <span class="mf">83f</span><span class="nl">c</span><span class="p">:</span>   <span class="mi">603</span><span class="n">b</span>        <span class="n">str</span> <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">0</span><span class="p">]</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="kt">int</span> <span class="n">var2</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span><span class='line'><span class="mf">83f</span><span class="nl">e</span><span class="p">:</span>   <span class="mi">230</span><span class="n">a</span>        <span class="n">movs</span>    <span class="n">r3</span><span class="p">,</span> <span class="err">#</span><span class="mi">10</span>
+</span><span class='line'><span class="mi">8400</span><span class="o">:</span>   <span class="mi">607</span><span class="n">b</span>        <span class="n">str</span> <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">4</span><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">asm</span><span class="p">(</span><span class="s">&quot;mov %0, %1 </span><span class="se">\n</span><span class="s">  \</span>
+</span><span class='line'><span class="s">     add %1, %0, $1&quot;</span> <span class="o">:</span> <span class="s">&quot;=r&quot;</span><span class="p">(</span><span class="n">var1</span><span class="p">),</span> <span class="s">&quot;=r&quot;</span><span class="p">(</span><span class="n">var2</span><span class="p">)</span> <span class="o">:</span> <span class="s">&quot;r&quot;</span><span class="p">(</span><span class="n">var2</span><span class="p">),</span> <span class="s">&quot;r&quot;</span><span class="p">(</span><span class="n">var1</span><span class="p">)</span><span class="o">:</span><span class="p">);</span>
+</span><span class='line'><span class="mi">8402</span><span class="o">:</span>   <span class="mi">687</span><span class="n">b</span>        <span class="n">ldr</span> <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">4</span><span class="p">]</span>
+</span><span class='line'><span class="mi">8404</span><span class="o">:</span>   <span class="mi">683</span><span class="n">a</span>        <span class="n">ldr</span> <span class="n">r2</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">0</span><span class="p">]</span>
+</span><span class='line'><span class="mi">8406</span><span class="o">:</span>   <span class="mi">461</span><span class="n">a</span>        <span class="n">mov</span> <span class="n">r2</span><span class="p">,</span> <span class="n">r3</span>
+</span><span class='line'><span class="mi">8408</span><span class="o">:</span>   <span class="n">f102</span> <span class="mo">0301</span>   <span class="n">add</span><span class="p">.</span><span class="n">w</span>   <span class="n">r3</span><span class="p">,</span> <span class="n">r2</span><span class="p">,</span> <span class="err">#</span><span class="mi">1</span>
+</span><span class='line'><span class="mi">840</span><span class="nl">c</span><span class="p">:</span>   <span class="mi">603</span><span class="n">a</span>        <span class="n">str</span> <span class="n">r2</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">0</span><span class="p">]</span>
+</span><span class='line'><span class="mi">840</span><span class="nl">e</span><span class="p">:</span>   <span class="mi">607</span><span class="n">b</span>        <span class="n">str</span> <span class="n">r3</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">4</span><span class="p">]</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;&amp;</span><span class="n">hellip</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">asm</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">ldr</span> <span class="n">r5</span><span class="p">,</span> <span class="o">%</span><span class="mi">0</span> <span class="err">\</span><span class="n">n</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;</span><span class="o">:</span>           <span class="o">:</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">m</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;(</span><span class="n">var1</span><span class="p">)</span><span class="o">:</span> <span class="o">&amp;</span><span class="n">ldquo</span><span class="p">;</span><span class="n">r5</span><span class="o">&amp;</span><span class="n">rdquo</span><span class="p">;);</span>
+</span><span class='line'>    <span class="mi">8424</span><span class="o">:</span>   <span class="mi">683</span><span class="n">d</span>        <span class="n">ldr</span> <span class="n">r5</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">0</span><span class="p">]</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">asm</span><span class="p">(</span><span class="s">&quot;str r4, %0&quot;</span>   <span class="o">:</span> <span class="s">&quot;=m&quot;</span><span class="p">(</span><span class="n">var2</span><span class="p">)</span><span class="o">:</span>          <span class="o">:</span> <span class="s">&quot;r4&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="mi">8426</span><span class="o">:</span>   <span class="mi">607</span><span class="n">c</span>        <span class="n">str</span> <span class="n">r4</span><span class="p">,</span> <span class="p">[</span><span class="n">r7</span><span class="p">,</span> <span class="err">#</span><span class="mi">4</span><span class="p">]</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;&amp;</span><span class="n">hellip</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="o">&amp;</span><span class="n">hellip</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<hr />
+
+<p><a name="ia_ps3"></a></p>
+
+<ul>
+<li>範例二的反組譯節錄</li>
+</ul>
+
+
+<pre><code class="c">$ objdump -d -S asm
+...
+000083f4 &lt;main&gt;:
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+...
+    int var1 = 12;
+    83fa:   230c        movs    r3, #12
+    83fc:   603b        str r3, [r7, #0]
+
+    int var2 = 10;
+    83fe:   230a        movs    r3, #10
+    8400:   607b        str r3, [r7, #4]
+
+    asm("mov %[my_var1], %[my_var2] \n  \
+         add %[my_var3], %[my_var4], $1" : 
+            [my_var1] "=r" (var1), [my_var3] "=r" (var2) :
+            [my_var2] "r"  (var2), [my_var4] "r"  (var1) :);
+    8402:   687b        ldr r3, [r7, #4]
+    8404:   683a        ldr r2, [r7, #0]
+    8406:   461a        mov r2, r3
+    8408:   f102 0301   add.w   r3, r2, #1
+    840c:   603a        str r2, [r7, #0]
+    840e:   607b        str r3, [r7, #4]
+...
+    asm("ldr r5, %[my_var1] \n":: [my_var1] "m"(var1): "r5");
+    8424:   683d        ldr r5, [r7, #0]
+
+    asm("str r4, %[my_var1]": [my_var1] "=m" (var2):: "r4");
+    8426:   607c        str r4, [r7, #4]
+...
+}
+</code></pre>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[在Banana Pi設定WPA2-PSK無線網路]]></title>
+    <link href="http://wen00072.github.io/blog/2015/12/03/bananapi-she-ding-wu-xian-wang-lu/"/>
+    <updated>2015-12-03T20:50:34+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/12/03/bananapi-she-ding-wu-xian-wang-lu</id>
+    <content type="html"><![CDATA[<p>Banana Pi是一套ARMv7為處理器的開發版。一般來說照官方網頁把IMAGE燒到SD卡，外接鍵盤、滑鼠、HDMI螢幕，再通電即可透過GUI設定網路。</p>
+
+<p>由於手上沒有任何外接設備，只有USB轉RS232線和USB WiFi。因此我只能在這樣的設備上設定網路，設定完成後就可以透過ssh server從外面連進去版子了。</p>
+
+<p>照例先描述環境</p>
+
+<p>HOST端
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="err">$</span> <span class="n">lsb_release</span> <span class="o">-</span><span class="n">a</span>
+</span><span class='line'><span class="n">No</span> <span class="n">LSB</span> <span class="n">modules</span> <span class="n">are</span> <span class="n">available</span><span class="p">.</span>
+</span><span class='line'><span class="n">Distributor</span> <span class="nl">ID</span><span class="p">:</span> <span class="n">Ubuntu</span>
+</span><span class='line'><span class="nl">Description</span><span class="p">:</span>    <span class="n">Ubuntu</span> <span class="mf">14.04.3</span> <span class="n">LTS</span>
+</span><span class='line'><span class="nl">Release</span><span class="p">:</span>    <span class="mf">14.04</span>
+</span><span class='line'><span class="nl">Codename</span><span class="p">:</span>   <span class="n">trusty</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="err">$</span> <span class="n">minicom</span> <span class="o">&amp;</span><span class="n">ndash</span><span class="p">;</span><span class="n">version</span>
+</span><span class='line'><span class="n">minicom</span> <span class="n">version</span> <span class="mf">2.7</span> <span class="p">(</span><span class="n">compiled</span> <span class="n">Jan</span>  <span class="mi">1</span> <span class="mi">2014</span><span class="p">)</span>
+</span><span class='line'><span class="o">&amp;</span><span class="n">hellip</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>設備端，假設你已經將系統燒入到SD卡中</p>
+
+<pre><code>$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.3 LTS
+Release:    14.04
+Codename:   trusty
+</code></pre>
+
+<h2>接上TTY</h2>
+
+<p>首先你要有一條RS232轉USB的設備，上頭有TX/RX/GND/VCC，VCC在這邊用不到。
+<img src="http://wen00072.github.io/files/banana_pi/DSC_0026.jpg" title="RS232轉USB線"></p>
+
+<p>版子上面其實已經幫你把腳位標示好了，上面有TX/RX和GND如下：
+<img src="http://wen00072.github.io/files/banana_pi/DSC_0030.jpg" title="Banana Pi RS232接腳"></p>
+
+<p>剩下的就是把線路接起來。由於版子已經裝上外框，我有用鑷子協助連接線路。
+<img src="http://wen00072.github.io/files/banana_pi/DSC_0024.jpg" title="接上訊號線"></p>
+
+<p>線路接完後，將USB接上你的HOST，檢查下面幾項</p>
+
+<ul>
+<li>下<code>dmesg</code>確認HOST找到<code>/dev/ttyUSBn</code>（n為0開始的正整數）</li>
+<li>確認你的終端機（我用minicom）設備指定<code>/dev/ttyUSBn</code>（n為0開始的正整數）</li>
+<li>確認你的終端機（我用minicom）參數為115200 BPS，8N1，軟體硬體流量控制關閉</li>
+</ul>
+
+
+<p>開啟你的終端機軟體，然後版子通電。當終端機畫面進入提示符號，請輸入帳號密碼。Banana Pi有預設的帳號密碼請自行上網查詢。</p>
+
+<h2>設定無線網路</h2>
+
+<p>Ubuntu 是透過<code>/etc/network/interface</code>去設定網路介面。這邊我們可以分成兩個部份討論</p>
+
+<h3>設定無線網路介面</h3>
+
+<p>首先你要下<code>ifconfig -a</code>看看你的無線網路介面名稱是什麼。我這邊是<code>wlan2</code>，為什麼不是<code>wlan0</code>，不要問我。</p>
+
+<p>接下來就是修改<code>/etc/network/interface</code>，先貼上我網路參考的部份</p>
+
+<pre><code class="text /etc/network/interface">auto wlan2
+
+allow-hotplug wlan2
+iface wlan2 inet dhcp
+wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
+</code></pre>
+
+<p>大概解釋一下</p>
+
+<ul>
+<li><code>auto</code>：<code>ifup</code>指令有<code>-a</code>參數會把有<code>auto</code>的網路介面全部bring up (bring up請自行估狗)</li>
+<li><code>allow-hotplug</code>：當kernel偵測到該網路介面被接上會自動bring up該網路介面，<a href="https://www.debian.org/doc/manuals/debian-reference/ch05.en.html">出處</a></li>
+<li><code>iface wlan2 inet dhcp</code>：指定網路介面<code>wlan2</code>使用<code>TCP/IP</code>，動態分配IP</li>
+<li><code>wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf</code>：找不到最原始出處，網路上就算是<a href="https://wiki.debian.org/WiFi/HowToUse">Debian官方文件</a>也直接拿來用而已，<code>man -K wpa-conf</code>也找不到。不過字面上不太難猜，就是指定wpa 會吃的config檔案路徑。</li>
+</ul>
+
+
+<h3>設定無線網路連線</h3>
+
+<p>前面有看到設定wpa的config檔案，接下來就來設定吧。我這邊是沒有該config檔，所以要自己新增一個。基本上就是設定SSID，密碼，加密方式，以及說明是否你要連的AP是否沒有broadcast SSID等。這邊我只是<a href="https://coderwall.com/p/v290ta/raspberry-pi-wifi-setup-with-wpa2-psk-aes">參考這邊</a>，有興趣的人可以自行鑽研。</p>
+
+<pre><code class="text /etc/wpa_supplicant/wpa_supplicant.conf">ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+network={
+ssid="AP的SSID"
+scan_ssid=1 # 如果你的AP 是沒有broadcast SSID就要加這個
+psk="你的AP 密碼(passphase)"
+proto=RSN
+key_mgmt=WPA-PSK
+pairwise=CCMP
+auth_alg=OPEN
+}
+</code></pre>
+
+<p>設定完畢確認連線正常、有安裝sshd後，剩下就透過ssh操作版子了。祝好運！</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[談談strip]]></title>
+    <link href="http://wen00072.github.io/blog/2015/11/16/tan-tan-strip/"/>
+    <updated>2015-11-16T21:32:23+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/11/16/tan-tan-strip</id>
+    <content type="html"><![CDATA[<p>Strip，顧名思義，就是脫脫。有興趣的紳士可以估狗strip club。那麼在Linux的binutil中strip是要脫什麼呢？先來問一下男人</p>
+
+<pre><code class="text man strip">STRIP(1)                                    GNU Development Tools                                    STRIP(1)
+
+NAME
+       strip - Discard symbols from object files.
+...
+</code></pre>
+
+<p>用中文說，就是從object 檔中把symbol丟掉。讓我們做幾個小實驗吧。</p>
+
+<ul>
+<li><a href="#strip_test1">測試一：Strip 執行檔</a></li>
+<li><a href="#strip_test2">測試二：Strip Object檔</a></li>
+<li><a href="#strip_test3">測試三：Strip debug 資訊</a></li>
+<li><a href="#strip_test4">測試四：Strip shared library</a></li>
+</ul>
+
+
+<h2>測試環境</h2>
+
+<pre><code class="text">$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.3 LTS
+Release:    14.04
+Codename:   trusty
+</code></pre>
+
+<h2>測試程式</h2>
+
+<pre><code class="c main_test.c">#include &lt;stdio.h&gt;
+extern test();
+
+int main(void)
+{
+    test();
+
+    return 0;
+}
+</code></pre>
+
+<pre><code class="c test.c">#include &lt;stdio.h&gt;
+
+char *g_myStr = "Wen";
+static char *gp_myStr = "Liao";
+
+static void s_test(void)
+{
+    printf("%s %s\n", g_myStr, gp_myStr);
+}
+
+
+void test(void)
+{
+    printf("Hello ");
+    s_test();
+}
+</code></pre>
+
+<pre><code class="Makefile Makefile">TARGET=test
+SRCS=test.c main_test.c
+OBJS=$(patsubst  %.c, %.o, $(SRCS))
+CFLAGS=-g
+
+$(TARGET): $(OBJS)
+    $(CC) $(CFLAGS) $^ -o $@
+
+clean:
+    rm -rf $(TARGET) $(OBJS)
+</code></pre>
+
+<p><a name="strip_test1"></a></p>
+
+<h2>測試一：Strip 執行檔</h2>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ ./test 
+Hello Wen Liao
+
+$ ls test -gG
+-rwxrwxr-x 1 10217 Nov 16 22:33 test
+</code></pre>
+
+<p>可以看到產生出來的執行檔有<code>10217</code> bytes。我們進一步來看執行檔的symbol。</p>
+
+<pre><code class="text">$ nm test
+0000000000601050 B __bss_start
+...
+0000000000601040 D g_myStr
+00000000004003e0 T _init
+...
+0000000000601048 d gp_myStr
+...
+000000000040056d T main
+                 U printf@@GLIBC_2.2.5
+...
+000000000040052d t s_test
+0000000000400553 T test
+0000000000601050 D __TMC_END__
+</code></pre>
+
+<p>那麼來看看strip後的檔案size和symbol吧。你可以看到size變小而且symbol不見了。另外上面可以比對一下<code>t</code>、<code>T</code>、<code>d</code>、<code>D</code>和<code>s_test</code>、<code>test</code>、<code>gp_myStr</code>、<code>g_myStr</code>的關係。</p>
+
+<pre><code class="text">$ strip test
+
+$ ./test 
+Hello Wen Liao
+
+$ nm test
+nm: test: no symbols
+
+$ ls -gG test
+-rwxrwxr-x 1 6296 Nov 16 22:36 test
+</code></pre>
+
+<p><a name="strip_test2"></a></p>
+
+<h2>測試二：Strip Object檔</h2>
+
+<p>因為strip就是把object file (執行檔也是一種object file)的symbol拿掉，所以在link time需要symbol時如果該object檔案被strip過，就會發生錯誤。範例如下：</p>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ nm -a test.o 
+0000000000000000 b .bss
+0000000000000000 n .comment
+0000000000000000 d .data
+0000000000000000 N .debug_abbrev
+0000000000000000 N .debug_aranges
+0000000000000000 N .debug_info
+0000000000000000 N .debug_line
+0000000000000000 N .debug_str
+0000000000000000 r .eh_frame
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+0000000000000000 n .note.GNU-stack
+                 U printf
+0000000000000000 r .rodata
+0000000000000000 t s_test
+0000000000000026 T test
+0000000000000000 a test.c
+0000000000000000 t .text
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ strip test.o 
+
+$ ls -gG test.o
+-rw-rw-r-- 1 952 Nov 16 23:03 test.o
+
+$ nm test.o
+nm: test.o: no symbols
+
+$ make
+cc -g test.o main_test.o -o test
+/usr/bin/ld: error in test.o(.eh_frame); no .eh_frame_hdr table will be created.
+main_test.o: In function `main':
+/home/wen/tmp/sandbox/main_test.c:6: undefined reference to `test'
+collect2: error: ld returned 1 exit status
+make: *** [test] Error 1
+</code></pre>
+
+<p>這邊我<code>nm</code>下了<code>-a</code>參數，這會顯示出<strong>所有的symbol</strong>，預設的<code>nm</code>輸出如下提供比較。</p>
+
+<pre><code class="text">$ nm test.o 
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+                 U printf
+0000000000000000 t s_test
+0000000000000026 T test
+</code></pre>
+
+<p><a name="strip_test3"></a></p>
+
+<h2>測試三：Strip debug 資訊</h2>
+
+<p>其實只是單純要介紹<code>-d</code>參數而已</p>
+
+<pre><code class="text">$ make clean
+rm -rf test  test.o  main_test.o
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ ls -gG test.o
+-rw-rw-r-- 1 3944 Nov 16 23:02 test.o
+
+$ strip -d test.o
+
+$ nm -a test.o
+0000000000000000 b .bss
+0000000000000000 n .comment
+0000000000000000 d .data
+0000000000000000 r .eh_frame
+0000000000000000 D g_myStr
+0000000000000008 d gp_myStr
+0000000000000000 n .note.GNU-stack
+                 U printf
+0000000000000000 r .rodata
+0000000000000000 t s_test
+0000000000000026 T test
+0000000000000000 t .text
+
+$ make
+cc -g test.o main_test.o -o test
+
+$ ./test
+Hello Wen Liao
+
+$ ls -gG test test.o
+-rwxrwxr-x 1 9737 Nov 16 23:01 test
+-rw-rw-r-- 1 1896 Nov 16 23:01 test.o
+</code></pre>
+
+<p><a name="strip_test4"></a></p>
+
+<h2>測試四：Strip shared library</h2>
+
+<p>這邊要幹的第一件事是修改Makefile如下。主要是把test.o包裝成shared library，這個Makefile很醜，我知道。</p>
+
+<pre><code class="Makefile Makefile">TARGET=test
+SRC=main_test.c
+OBJ=$(patsubst  %.c, %.o, $(SRC))
+
+LIB_SRC=test.c
+LIB_OBJ=$(patsubst  %.c, %.o, $(LIB_SRC))
+LIB_NAME=test
+LIB=lib$(LIB_NAME).so
+CFLAGS=-g
+
+$(TARGET): $(OBJ) $(LIB)
+    $(CC) $(CFLAGS) $&lt; -o $@ -L./ -l$(LIB_NAME)
+
+$(LIB): $(LIB_OBJ)
+    $(CC) -shared -Wl,-soname,$(LIB).0 $^ -o $@
+    rm $(LIB).0 &amp;&amp; ln -sf $(LIB) $(LIB).0
+
+$(LIB_OBJ): $(LIB_SRC)
+    $(CC) $(CFLAGS) -c -fPIC $^
+
+clean:
+    rm -rf $(TARGET) $(OBJ) $(LIB_OBJ)
+</code></pre>
+
+<p>自幹shared library執行程式的時候不要忘記加上<code>LD_LIBRARY_PATH</code>環境變數：
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make clean
+</span><span class='line'>rm -rf test  main_test.o  test.o&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ make
+</span><span class='line'>cc -g   -c -o main_test.o main_test.c
+</span><span class='line'>cc -g -c -fPIC test.c
+</span><span class='line'>cc -shared -Wl,-soname,libtest.so.0 test.o -o libtest.so
+</span><span class='line'>rm libtest.so.0 &amp;amp;&amp;amp; ln -sf libtest.so libtest.so.0
+</span><span class='line'>cc -g main_test.o -o test -L./ -ltest&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ LD_LIBRARY_PATH=&lt;code&gt;pwd&lt;/code&gt; ./test
+</span><span class='line'>Hello Wen Liao
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>現在來比較strip前後的shared library 差異吧。
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ nm -a libtest.so
+</span><span class='line'>0000000000000000 a
+</span><span class='line'>0000000000201048 b .bss
+</span><span class='line'>0000000000201048 B &lt;strong&gt;bss_start
+</span><span class='line'>0000000000000000 n .comment
+</span><span class='line'>0000000000201048 b completed.6973
+</span><span class='line'>0000000000000000 a crtstuff.c
+</span><span class='line'>0000000000000000 a crtstuff.c
+</span><span class='line'>                 w &lt;/strong&gt;cxa_finalize@@GLIBC_2.2.5
+</span><span class='line'>0000000000201030 d .data
+</span><span class='line'>0000000000000000 N .debug_abbrev
+</span><span class='line'>0000000000000000 N .debug_aranges
+</span><span class='line'>0000000000000000 N .debug_info
+</span><span class='line'>0000000000000000 N .debug_line
+</span><span class='line'>0000000000000000 N .debug_str
+</span><span class='line'>0000000000000650 t deregister_tm_clones
+</span><span class='line'>00000000000006c0 t &lt;strong&gt;do_global_dtors_aux
+</span><span class='line'>0000000000200df0 t &lt;/strong&gt;do_global_dtors_aux_fini_array_entry
+</span><span class='line'>0000000000201030 d &lt;strong&gt;dso_handle
+</span><span class='line'>0000000000200e00 d .dynamic
+</span><span class='line'>0000000000200e00 d &lt;em&gt;DYNAMIC
+</span><span class='line'>0000000000000398 r .dynstr
+</span><span class='line'>0000000000000230 r .dynsym
+</span><span class='line'>0000000000201048 D &lt;/em&gt;edata
+</span><span class='line'>00000000000007c0 r .eh_frame
+</span><span class='line'>000000000000079c r .eh_frame_hdr
+</span><span class='line'>0000000000201050 B &lt;em&gt;end
+</span><span class='line'>000000000000077c T &lt;/em&gt;fini
+</span><span class='line'>000000000000077c t .fini
+</span><span class='line'>0000000000200df0 t .fini_array
+</span><span class='line'>0000000000000700 t frame_dummy
+</span><span class='line'>0000000000200de8 t &lt;/strong&gt;frame_dummy_init_array_entry
+</span><span class='line'>0000000000000840 r &lt;strong&gt;FRAME_END&lt;/strong&gt;
+</span><span class='line'>0000000000201000 d &lt;em&gt;GLOBAL_OFFSET_TABLE&lt;/em&gt;
+</span><span class='line'>                 w &lt;strong&gt;gmon_start&lt;/strong&gt;
+</span><span class='line'>0000000000201038 D g_myStr
+</span><span class='line'>00000000000001f0 r .gnu.hash
+</span><span class='line'>000000000000045c r .gnu.version
+</span><span class='line'>0000000000000480 r .gnu.version_r
+</span><span class='line'>0000000000200fd0 d .got
+</span><span class='line'>0000000000201000 d .got.plt
+</span><span class='line'>0000000000201040 d gp_myStr
+</span><span class='line'>00000000000005f0 T &lt;em&gt;init
+</span><span class='line'>00000000000005f0 t .init
+</span><span class='line'>0000000000200de8 t .init_array
+</span><span class='line'>                 w &lt;/em&gt;ITM_deregisterTMCloneTable
+</span><span class='line'>                 w &lt;em&gt;ITM_registerTMCloneTable
+</span><span class='line'>0000000000200df8 d .jcr
+</span><span class='line'>0000000000200df8 d &lt;strong&gt;JCR_END&lt;/strong&gt;
+</span><span class='line'>0000000000200df8 d &lt;strong&gt;JCR_LIST&lt;/strong&gt;
+</span><span class='line'>                 w &lt;/em&gt;Jv_RegisterClasses
+</span><span class='line'>00000000000001c8 r .note.gnu.build-id
+</span><span class='line'>0000000000000610 t .plt
+</span><span class='line'>                 U printf@@GLIBC_2.2.5
+</span><span class='line'>0000000000000680 t register_tm_clones
+</span><span class='line'>00000000000004a0 r .rela.dyn
+</span><span class='line'>00000000000005a8 r .rela.plt
+</span><span class='line'>0000000000000785 r .rodata
+</span><span class='line'>0000000000000735 t s_test
+</span><span class='line'>0000000000000760 T test
+</span><span class='line'>0000000000000000 a test.c
+</span><span class='line'>0000000000000650 t .text
+</span><span class='line'>0000000000201048 d &lt;strong&gt;TMC_END&lt;/strong&gt;&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ ls -gG libtest.so
+</span><span class='line'>-rwxrwxr-x 1 9275 Nov 16 23:47 libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ strip libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ ls -gG libtest.so
+</span><span class='line'>-rwxrwxr-x 1 6104 Nov 16 23:47 libtest.so&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ nm -a libtest.so
+</span><span class='line'>nm: libtest.so: no symbols&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ LD_LIBRARY_PATH=&lt;code&gt;pwd&lt;/code&gt; ./test
+</span><span class='line'>Hello Wen Liao
+</span></code></pre></td></tr></table></div></figure></p>
+
+<p>這邊變成有新的作業，dynamic link的時候沒有shared library沒有symbol怎麼拿到function address和全域變數？下次有看到再來解釋吧。</p>
+
+<h2>補充</h2>
+
+<p>如果編譯的程式碼有加入debug資訊，objdump在反組譯的時候可以加入<code>-S</code>參數比對原始碼對應的機械碼，對於想要研究系統細節的人應該有所幫助。簡單範例如下</p>
+
+<pre><code class="text"> x$ make clean
+rm -rf test  test.o  main_test.o
+$ make
+cc -g   -c -o test.o test.c
+cc -g   -c -o main_test.o main_test.c
+cc -g test.o main_test.o -o test
+
+$ objdump -S -d test
+
+test:     file format elf64-x86-64
+
+
+Disassembly of section .init:
+
+00000000004003e0 &lt;_init&gt;:
+  4003e0:   48 83 ec 08             sub    $0x8,%rsp
+...
+
+0000000000400553 &lt;test&gt;:
+
+
+void test(void)
+{
+  400553:   55                      push   %rbp
+  400554:   48 89 e5                mov    %rsp,%rbp
+    printf("Hello ");
+  400557:   bf 24 06 40 00          mov    $0x400624,%edi
+  40055c:   b8 00 00 00 00          mov    $0x0,%eax
+  400561:   e8 aa fe ff ff          callq  400410 &lt;printf@plt&gt;
+    s_test();
+  400566:   e8 c2 ff ff ff          callq  40052d &lt;s_test&gt;
+}
+  40056b:   5d                      pop    %rbp
+  40056c:   c3                      retq   
+
+...
+</code></pre>
+
+<h2>參考資料</h2>
+
+<ul>
+<li>Binary Hacks：駭客秘傳技巧一百招</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Using as 手冊筆記]]></title>
+    <link href="http://wen00072.github.io/blog/2015/05/24/notes-on-using-as/"/>
+    <updated>2015-05-24T20:48:02+08:00</updated>
+    <id>http://wen00072.github.io/blog/2015/05/24/notes-on-using-as</id>
+    <content type="html"><![CDATA[<p><strong>先承認我自己很不滿意這篇，太亂了。只能當工具查keyword用。不過as 手冊的確就是指令和語法。原本是以英文字母順序說明，我只是把這些用自認的方式重新分類。很多地方也真的只有句意翻譯。就把他當作看手冊的導讀，有找的需要的再進去看<a href="https://sourceware.org/binutils/docs/as/index.html">手冊</a>吧。</strong></p>
+
+<p>本篇只討論ELF部份，其他binary format跳過。</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#as_param">as參數</a></li>
+<li><a href="#as_term">名詞解釋</a>
+
+<ul>
+<li><a href="#as_term_const">常數</a></li>
+<li><a href="#as_term_sec">Section</a>
+
+<ul>
+<li><a href="#as_term_sec_undef">undefined section</a></li>
+</ul>
+</li>
+<li><a href="#as_term_rel">relocation</a></li>
+</ul>
+</li>
+<li><a href="#as_expr">Expression</a>
+
+<ul>
+<li><a href="#as_expr_emp">Empty expression</a></li>
+<li><a href="#as_expr_int">Integer expression</a>
+
+<ul>
+<li><a href="#as_expr_int_arg">Arguments</a></li>
+<li><a href="#as_expr_int_op">Operators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#as_dit">directives</a>
+
+<ul>
+<li><a href="#as_dit_var">變數相關</a></li>
+<li><a href="#as_dit_sym_desc">Symbol的描述</a></li>
+<li><a href="#as_dit_sym_type">Symbole type</a></li>
+<li><a href="#as_dit_sym_other">其他Symbol 相關</a></li>
+<li><a href="#as_dit_sec">Section</a></li>
+<li><a href="#as_dit_cond">條件以及控制相關</a></li>
+<li><a href="#as_dit_mac">巨集</a>
+
+<ul>
+<li><a href="#as_dit_mac_alt">altmacro</a></li>
+</ul>
+</li>
+<li><a href="#as_dit_elf">ELF相關</a>
+
+<ul>
+<li><a href="#as_dit_elf_stack">ELF section stack</a></li>
+<li><a href="#as_dit_elf_vis">ELF visibility</a></li>
+</ul>
+</li>
+<li><a href="#as_dit_dbg">除錯相關</a></li>
+<li><a href="#as_dit_misc">未分類</a></li>
+</ul>
+</li>
+<li><a href="#as_ref">參考資料</a></li>
+</ul>
+
+
+<p><a name="as_param"></a></p>
+
+<h2><code>as</code>參數</h2>
+
+<p>只提幾個我有興趣的部份</p>
+
+<ul>
+<li><code>-Z</code>：硬上，就算有錯誤照樣組譯沒有錯的部份。</li>
+<li><code>--gstabs+</code>：好東西，可以幫你加入debug資訊，然後直接用gdb除錯。</li>
+<li>如果檔案副檔名為<code>.s</code>，就是普通的組合語言原始檔。</li>
+<li>如果檔案副檔名為<code>.S</code>，就可以使用<code>cpp</code>（還記得c preporcessor吧?)來處理前置處理。</li>
+</ul>
+
+
+<p><a name="as_term"></a></p>
+
+<h2>名詞解釋</h2>
+
+<ul>
+<li><code>symbol</code>：由字母、數字、和<code>_</code>、<code>.</code>、<code>$</code>組成的字串。不得以數字開頭。
+
+<ul>
+<li><code>label</code>：  <code>symbol</code>後面加<code>:</code></li>
+</ul>
+</li>
+<li><code>.</code>開頭的symbol是gas 的<code>directive</code></li>
+<li><code>expression</code>：運算式，結果代表不是位址就是單純的數字</li>
+<li>原始碼不是以上的情況，由英文字母開頭組成的字串就是instruction</li>
+<li>原始碼最後一行一定要是<code>\n</code>。目前網友Carl有提供為什麼這樣規定的<a href="chrome-extension://klbibkeccnjlkjkiokjodocebajanakg/suspended.html#uri=http://unix.stackexchange.com/questions/18743/whats-the-point-in-adding-a-new-line-to-the-end-of-a-file">link</a>。</li>
+</ul>
+
+
+<p><a name="as_term_const"></a></p>
+
+<h3>常數</h3>
+
+<ul>
+<li>字元常數：
+
+<ul>
+<li><code>'字元</code></li>
+<li>顯示\： <code>'\\</code></li>
+</ul>
+</li>
+<li>字串：<code>"字串"</code></li>
+</ul>
+
+
+<p><a name="as_term_sec"></a></p>
+
+<h3>Section</h3>
+
+<p>一個連續的記憶體空間。這段連續空間都是為了處理某些單一特定的任務如執行程式碼、存放global變數等。</p>
+
+<p>題外話，<code>.bss</code>存在的目的是節省儲存空間，沒有初始的全域變數當然不需要在檔案中保留儲存空間。</p>
+
+<p><a name="as_term_sec_undef"></a></p>
+
+<h4>undefined section</h4>
+
+<p>在組譯的時段只要位址無法決定的symbol，一律放到undefined section。然後祈禱linker幫你搞定。</p>
+
+<p><a name="as_term_rel"></a></p>
+
+<h3>relocation</h3>
+
+<p>前面的文有提到，linker功能之一就是把不同的object檔案<strong>黏</strong>成一個執行檔。要怎麼<strong>黏</strong>呢？</p>
+
+<p>每個object 檔案的起始點都是address 0。由linker計算並設定每個object檔案最後在執行檔放置的address，避免這些object的內容互相覆蓋。</p>
+
+<p>而linker要怎麼搬移和設定最後的位址呢？這是因為object檔案內已經有規範好的不同名稱的好幾個連續空間，也就是section。所以linker把這些object檔案中相同section名稱的連續空間搬到執行檔內相同名稱的空間，並且保證執行檔內這些section的空間也是連續的。而搬移的動作並設定section的runtime address就稱為<code>relocation</code>。</p>
+
+<p>Linker在relocation時需要考慮的問題，as也幫他處理了，這些問題是</p>
+
+<ul>
+<li>目前這個位址要對應到object檔案的哪個地方?</li>
+<li>這個位址會需要佔用多少byte的空間?不懂？int和char吃的空間總會不一樣吧。</li>
+<li>目前位址對應到的是哪個section? 這個位址和對應section的offset為何？</li>
+<li>目前的位址是絕對位址還是和program counter相對的位址?</li>
+</ul>
+
+
+<p>另外要注意的是，大部分的位址可以表示成
+<code>asm
+     (section) + (offset into section)
+</code></p>
+
+<p><a name="as_expr"></a></p>
+
+<h2>Expression</h2>
+
+<p>expression的結果代表不是位址就是單純的數字。這些數字要嘛是絕對位址、要嘛就是某個section的offset。而expression之間可以有空白。</p>
+
+<p><a name="as_expr_emp"></a></p>
+
+<h3>Empty expression</h3>
+
+<p>空白字元或是null，其值會被設為0</p>
+
+<p><a name="as_expr_int"></a></p>
+
+<h3>Integer expression</h3>
+
+<p>由一個以上的argument和operator組成的expression</p>
+
+<p><a name="as_expr_int_arg"></a></p>
+
+<h4>Arguments</h4>
+
+<p>包含 symbols, numbers 或subexpressions，分別討論</p>
+
+<ul>
+<li>symbol：結果將會是 {section setction的offset數值}，數值會是32位元的二的補數（就是有正負值啦）</li>
+<li>numbers：一般來說，是正整數。如果你要處理浮點數或是大數（超過32位元的數字）as會噴警告。你需要自己處理這種情況。</li>
+<li>subexpressions：指的是
+
+<ul>
+<li>(expression)</li>
+<li>prefix operator 伴隨一個 argument</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="as_expr_int_op"></a></p>
+
+<h4>Operators</h4>
+
+<p>用來協助運算section中的offset位址。</p>
+
+<ul>
+<li>Infix Operators
+
+<ul>
+<li>就一般的binary operator如<code>+</code>, <code>-</code>等</li>
+</ul>
+</li>
+<li>Prefix Operators
+
+<ul>
+<li><code>-</code>：負號</li>
+<li><code>~</code>：補數，就是將argument的每個位元inverse</li>
+</ul>
+</li>
+</ul>
+
+
+<p>Infix也和C語言一樣，有優先順序、符號定義也大致相同，列出如下</p>
+
+<ul>
+<li>最優先
+
+<ul>
+<li><code>*</code>, <code>/</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code></li>
+</ul>
+</li>
+<li>第二順位
+
+<ul>
+<li><code>|</code>, <code>&amp;</code>, <code>^</code>, <code>!</code></li>
+</ul>
+</li>
+<li>第三順位
+
+<ul>
+<li><code>+</code>, <code>-</code>, <code>==</code>, <code>&lt;&gt;</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>
+
+<ul>
+<li><code>&lt;&gt;</code>就是<code>!=</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>最低順位
+
+<ul>
+<li><code>&amp;&amp;</code>, <code>||</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="as_dit"></a></p>
+
+<h2>directives</h2>
+
+<p>重頭戲。directive又稱pseudo-ops，一律以<code>.</code>開頭。照字面理解，這東西是用來協助使用開發，而不是真正的CPU instruction。這邊我只列出<del>看得懂</del>我感興趣的部份。有興趣請參考<a href="https://sourceware.org/binutils/docs/as/Pseudo-Ops.html#Pseudo-Ops">出處</a>。另外和硬體相依的directive請參考<a href="https://sourceware.org/binutils/docs/as/Machine-Dependencies.html#Machine-Dependencies">這邊</a>。</p>
+
+<p><a name="as_dit_var"></a></p>
+
+<h3>變數相關</h3>
+
+<ul>
+<li><code>.ascii "字串"</code>：可以用多個字串，中間以<code>,</code>隔開。這些字串最終會被一起放在連續的記憶體中。</li>
+<li><code>.asciz "字串"</code>：和樓上的差別是字串後面會自動填<code>\0</code>，和C語言的字串表示方式相同。</li>
+<li><code>.balign[wl] abs-expr, abs-expr, abs-expr</code>：和<code>.align</code>差別在b是<code>byte</code>，w是<code>2-byte</code>，l是<code>4-byte</code>。這代表什麼呢？代表要pad的數字(如果有指定的話)要注意fill byte數量。如<code>.balignw 8, 0xbeef</code>。</li>
+<li><code>.byte expressions</code>：<code>expression</code>數量可以從0個到多個，中間以<code>,</code>隔開。這些<code>expression</code>會依照順序排列。那麼要幹什麼用呢？你可以這樣玩。</li>
+</ul>
+
+
+<pre><code class="asm">.byte 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x00 /* "Hello" */
+</code></pre>
+
+<p>還有其他玩法，請參考<a href="http://stackoverflow.com/questions/7290318/use-of-byte-assembler-directive-in-gnu-assembly">這邊</a>和<a href="http://www-ug.eecg.toronto.edu/msl/assembler.html">這邊</a></p>
+
+<ul>
+<li><code>.int expressions</code></li>
+<li><code>.long expressions</code>
+
+<ul>
+<li>上面兩個有同樣效果，<code>expression</code>為16-bit寬度。可以用<code>,</code>隔開。和<code>.byte</code>用法類似。長度以及order會和CPU架構相關。</li>
+</ul>
+</li>
+<li><code>.hword expressions</code></li>
+<li><code>.short expressions</code>
+
+<ul>
+<li>上面兩個有同樣效果，<code>expression</code>為16-bit寬度。可以用<code>,</code>隔開。和<code>.byte</code>用法類似。</li>
+</ul>
+</li>
+<li><code>.double flonums</code>：就浮點數，可以用<code>,</code>隔開。和<code>.byte</code>用法類似。表示方式要看target CPU架構。</li>
+<li><code>.float flonums</code>：就浮點數，可以用<code>,</code>隔開。和<code>.byte</code>用法類似。表示方式要看target CPU架構。</li>
+<li><code>.lcomm symbol, length</code>：為<code>symbol</code>保留<code>length</code>的空間，該symbol型態不會是<code>global</code>，並且會被放在<code>.bss</code> section。</li>
+<li><code>.octa 大數字</code>：為16-byte寬度。可以用<code>,</code>隔開。和<code>.byte</code>用法類似。</li>
+<li><code>.quad 大數字</code>：為8-byte寬度。可以用<code>,</code>隔開。和<code>.byte</code>用法類似。</li>
+<li><code>.string "字串"</code>：將字串放到object file中，看不出來和<code>.ascii</code>差在那。</li>
+<li><code>.string16 "字串"</code>：將字串放到object file中，字串中的單個字元將會展開成2個bytes。看不出來和<code>.ascii</code>差在那。</li>
+<li><code>.string32 "字串"</code>：將字串放到object file中，字串中的單個字元將會展開成4個bytes。看不出來和<code>.ascii</code>差在那。</li>
+<li><code>.string64 "字串"</code>：將字串放到object file中，字串中的單個字元將會展開成8個bytes。看不出來和<code>.ascii</code>差在那。</li>
+<li><code>.set symbol, expression</code>：將<code>symbol</code>的值設成<code>expression</code>的值。</li>
+<li><code>.size symbol, expression</code>：設定<code>symbol</code>空間為<code>expression</code>的值。</li>
+</ul>
+
+
+<p><a name="as_dit_sym_desc"></a></p>
+
+<h3>Symbol的描述</h3>
+
+<p>visibility：local, global or weak</p>
+
+<ul>
+<li><code>.extern</code>：單純是相容性使用，特地列出來只是因為手冊說as將所有<code>undefined symbols</code>視為<code>extern</code></li>
+<li><code>.global symbol</code></li>
+<li><code>.globl symbol</code>
+
+<ul>
+<li>以上兩個同樣效果，就是讓<code>linker</code>看得到這個<code>symbol</code>，也就是說透過<code>nm</code>觀察binary也可以看得到這些<code>symbol</code>。</li>
+</ul>
+</li>
+<li><code>.local symbol</code>：讓<code>linker</code>看<font color=red>不</font>到這個<code>symbol</code>。手冊上另外有提到<code>.local</code><a href="https://sourceware.org/binutils/docs/as/Local.html#Local">不支援alignment的問題和解法</a>。<font color="red">我看不懂</font>，有興趣自行去連結參考。</li>
+<li><code>.weak symbol</code>：組譯器找不到<code>symbol</code>會產生一個。</li>
+</ul>
+
+
+<p><a name="as_dit_sym_type"></a></p>
+
+<h3>Symbol type</h3>
+
+<ul>
+<li><code>.type symbol, type</code>：type 描述方式有<a href="https://sourceware.org/binutils/docs/as/Type.html#Type">五種</a>。我只用我看順眼的那種說明。
+
+<ul>
+<li><code>"function"</code>：這個<code>symbol</code>是個function</li>
+<li><code>"object"</code>：這個<code>symbol</code>用來存放資料</li>
+<li><code>"tls_object"</code>：這個<code>symbol</code>用來存放thread local資料</li>
+<li><code>"notype"</code>：沒有指定</li>
+<li><code>"gnu_unique_object"</code>：保證該<code>symbol</code>是唯一的symbol</li>
+<li><code>"gnu_indirect_function"</code>：看不懂</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="as_dit_sym_other"></a></p>
+
+<h3>其他Symbol 相關</h3>
+
+<ul>
+<li><code>.desc symbol, abs-expression</code>：提供描述symbol的特性，細節請參考<a href="#as_dit_sym_desc">前面</a>的說明。</li>
+<li><code>.equ symbol, expression</code>：將<code>symbol</code>設成<code>expression</code>的值</li>
+<li><code>.equiv symbol, expression</code>：和上面類似，但是如果該<code>symbol</code>之前已經定義過，就會噴錯誤。</li>
+</ul>
+
+
+<p><a name="as_dit_sec"></a></p>
+
+<h3>Section</h3>
+
+<ul>
+<li><code>.data</code>：不解釋</li>
+<li><code>.test</code>：不解釋</li>
+<li><code>.section name</code>：讓as把以下的東西組成<code>name</code>的section。名字雖然可以亂取，但是也要看binary format有沒有支援。如<code>a.out</code>就沒有這東西。</li>
+</ul>
+
+
+<h4>ELF 下的Section directive</h4>
+
+<p>ELF的話，這個directive有加料。說明如下： <code>[]</code>表示optional</p>
+
+<ul>
+<li><code>.section name [, "flags"[, @type[,flag_specific_arguments]]]</code>
+
+<ul>
+<li><code>flags</code>：可由下面的flag合體組成
+
+<ul>
+<li><code>a</code>：allocatable，就是要在記憶體內吃空間，但是loader不一定會載入東西到該section</li>
+<li><code>e</code>：非executable或是shared library的section</li>
+<li><code>w</code>：可寫入</li>
+<li><code>x</code>：可執行</li>
+<li><code>M</code>：可被merge</li>
+<li><code>S</code>：該section有 zero terminated 字串</li>
+<li><code>G</code>：屬於某個section group</li>
+<li><code>T</code>：給thread local存放東西用 (存放三小？)</li>
+<li><code>?</code>：看不懂，跳過</li>
+</ul>
+</li>
+<li><code>type</code>
+
+<ul>
+<li><code>@progbits</code>：section有資料 (怎麼有種廢話的感覺？)</li>
+<li><code>@nobits</code>：沒有資料，如<code>.bss</code>這樣的section</li>
+<li><code>@note</code>：不是給程式執行的時候使用的section</li>
+<li><code>@init_array</code>：該section 有個pointer arrary 指到init 函數(<a href="http://stackoverflow.com/questions/10468531/whats-init-array-section-in-elf-binary">補充說明1</a> <a href="https://sourceware.org/ml/binutils/2009-01/msg00286.html">補充說明2</a>)</li>
+<li><code>@fini_array</code>：該section 有個pointer arrary 指到fini 函數</li>
+<li><code>@preinit_array</code>：該section 有個pointer arrary 指到pre-init 函數</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p>由於<code>@</code>在某些平台如ARM上是註解的符號，這種情況需要用<code>%</code>替代。</p>
+
+<p><code>G</code>和<code>M</code>有特別規範，必須隔離在雙引號外面。而同時要用這兩個flag要以<code>MG</code>順序擺放，範例如下：</p>
+
+<ul>
+<li><code>.section name , "flags"MG,...</code></li>
+</ul>
+
+
+<p>Section group目前先假裝沒看到，有機會又看到再回來討論。</p>
+
+<p><a name="as_dit_cond"></a></p>
+
+<h3>條件以及控制相關</h3>
+
+<ul>
+<li>if 部份有點雜亂，懶得想範例測試，想像成C語言的<code>#ifdef</code>。剩下自己看<a href="https://sourceware.org/binutils/docs/as/If.html">手冊</a>。</li>
+<li><code>.irp symbol,values...</code>：和巨集概念很類似，把<code>.irp ...</code>到<code>.endr</code>之間的instruction用到<code>symbol</code>的部份全部換成value。範例如下。</li>
+</ul>
+
+
+<p>.irp item, 2, 3, 4
+    mov    %r\item, $\item
+.endr</p>
+
+<p>會展開成
+<code>asm
+    mov %r2, $2
+    mov %r3, $3
+    mov %r4, $4
+</code></p>
+
+<ul>
+<li><code>.irpc  symbol,values...</code>：手冊上面的說明幾乎和<code>irp</code>相同，悲劇的是範例和<code>.irp</code>完全一致。唯一差別是<code>.iprc</code>中有提到character，只能猜測c是character。</li>
+<li><code>.offset loc</code>：將locale counter設定成loc。</li>
+<li><code>.org new-lc, fill</code>：同樣是更動locale counter，但是只能在同一個section中移動。另外一個要注意的是這個指令只能增加locale counter，硬要減少是不可能的。當locale couter移動後，中間的空白會填入<code>fill</code>的值。不加上<code>, fill</code> as會填0。</li>
+<li><code>.rept 次數</code>：重複<code>.rept</code>到<code>.endr</code>指定的次數。</li>
+<li><code>.skip size, fill</code>：產生<code>size</code>長度，<code>fill</code>值的資料。</li>
+<li><p><code>.fill repeat, size, value</code>：產生<code>value</code>，佔用空間為<code>size</code>。是否要產生多個，否的話<code>repeat</code>填<code>0</code>，是的話<code>repeat</code>填要產生的個數。<code>size</code>和<code>value</code>為optional，<code>size</code>預設為<code>1</code>，<code>value</code>預設為<code>0</code>。</p>
+
+<ul>
+<li><code>.fill 2,,</code></li>
+<li><code>.fill 2,,10</code></li>
+<li><code>.fill 2,4,</code></li>
+</ul>
+</li>
+<li><p><code>.warning "string"</code>：印出警告訊息。</p></li>
+<li><code>.err</code>：噴錯誤，除非as有-Z指令，不然別想產生obj檔。</li>
+<li><p><code>.error "錯誤訊息"</code>：印出錯誤訊息然後GG。不帶錯誤訊息as會印出檔案名稱和用了<code>.error</code>那行。</p></li>
+<li><p><code>.fail expression</code>：<code>expression</code>值大於五百噴警告，小於五百噴錯誤。用在複雜的巢狀巨集或是條件式組合語言中。</p></li>
+<li><code>.print "字串"</code>：組譯的時候stdout會印出字串。</li>
+<li><code>.end</code>：表示組合語言程式結束</li>
+</ul>
+
+
+<p><a name="as_dit_mac"></a></p>
+
+<h3>巨集</h3>
+
+<p>跳過，自行看<a href="https://sourceware.org/binutils/docs/as/Macro.html">手冊</a></p>
+
+<p><a name="as_dit_elf"></a></p>
+
+<h3>ELF相關</h3>
+
+<ul>
+<li><code>.symver symbol, symbol2@nodename</code>：指定symbol的版本號碼，一般用在shared library中。<a href="https://sourceware.org/binutils/docs/as/Symver.html#Symver">詳細說明</a>懶得看，那天GG再回來看。</li>
+</ul>
+
+
+<p><a name="as_dit_elf_stack"></a></p>
+
+<h4>ELF section stack</h4>
+
+<ul>
+<li><code>.subsection name</code>：把目前的section push到section stack中，並且把目前的subsection置換成<code>name</code>。</li>
+<li><code>.popsection</code>：從section stack中pop最上面的section去覆蓋目前的section</li>
+<li><code>.pushsection name [, subsection] [, "flags"[, @type[,arguments]]]</code>：把目前的section push到section stack中，並且把目前的section置換成<code>name</code>以及<code>subsection</code>，<code>type</code>和<code>argument</code>和<code>.section</code>的參數相同。</li>
+</ul>
+
+
+<p><a name="as_dit_elf_vis"></a></p>
+
+<h4>ELF visibility</h4>
+
+<ul>
+<li><code>.protected symbol</code>：不但外部看不到該symbol，連內部要使用讀取該symbol的另外一個symbol也要在內部定義。直接舉個虛擬C語言。</li>
+</ul>
+
+
+<pre><code class="c ex.c">static int whatever = 1;
+void func(void)
+{
+    int local = whatever;
+}
+</code></pre>
+
+<ul>
+<li><code>.hidden symbol</code>：想像C語言在function前面加上<code>static</code>，觀念類似，讓該symbol無法被其他component看見。手冊這樣的symbol通常被視為<a href="https://sourceware.org/binutils/docs/as/Hidden.html#Hidden"><code>.protect symbol</code></a>，目前懶得寫程式測試。單純猜測這兩個有不同，不然幹嘛要分成兩個指令。</li>
+<li><code>.internal symbol</code>：手冊上提到除了和<code>.hidden</code>有同樣效果外，不同的CPU會針對這個symbol做特別處理，到底是哪些特別處理，手冊沒說。</li>
+</ul>
+
+
+<p><a name="as_dit_dbg"></a></p>
+
+<h3>除錯相關</h3>
+
+<p>大部分跳過，太多背景需要補完。</p>
+
+<ul>
+<li><code>.def</code></li>
+<li><code>.endef</code></li>
+<li><code>.dim</code>：給compiler產生除錯用。</li>
+<li><code>.file 檔案行號 檔名</code>：<a href="http://en.wikipedia.org/wiki/DWARF">DWARF2</a>用的除錯，除錯時對應的原始碼行號。</li>
+<li><p><code>.func name[,label]</code>：只有開啟除錯有效，必須在結尾加入<code>.endfunc</code>。<code>label</code>就是組合語言內的<code>label</code>，也就是該function的進入點。不填的話，就在<code>name</code>加上prefix 字元當作進入點，通常prefix字元為<code>_</code>。</p></li>
+<li><p><code>.loc fileno lineno [column] [options]</code>：<a href="http://en.wikipedia.org/wiki/DWARF">DWARF2</a>用的除錯。整理如下</p>
+
+<ul>
+<li><font color="red">手冊假設我們很瞭debug內部資訊，但是我不會。看下來他們有提到
+
+<ul>
+<li><code>.debug_line</code> 狀態機</li>
+<li><code>.debug_line</code> line number matrix</li>
+<li>不明暫存器：<code>is_stmt</code> register，<code>isa</code> register等</font></li>
+</ul>
+</li>
+<li>資訊放在binary 的<code>.debug_line</code> section。</li>
+<li>在debuger(?)載入<code>.debug_line</code>資訊時，讀到該行，會把參數<code>fileno</code>, <code>lineno</code>,等參數一併載入。</li>
+<li>options:
+
+<ul>
+<li><code>basic_block</code>：設定 <code>.debug_line</code>狀態為<code>basic_block</code></li>
+<li><code>prologue_end</code>：設定 <code>.debug_line</code>狀態為<code>prologue_end</code></li>
+<li><code>epilogue_begin</code>：設定 <code>.debug_line</code>狀態為<code>epilogue_begin</code></li>
+<li><code>is_stmt value</code>：設定 <code>is_stmt</code> register 在<code>.debug_line</code>狀態為<code>value</code>，合法數值只有<code>0</code>或<code>1</code>。</li>
+<li><code>isa value</code>：設定 <code>isa</code> register 在<code>.debug_line</code>狀態為<code>value</code>，合法數值只有<code>0</code>或<code>1</code>。</li>
+<li><code>discriminator value</code>：設定 <code>discriminator</code> register 在<code>.debug_line</code>狀態為<code>value</code>，合法數值只有<code>0</code>或<code>1</code>。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>.loc_mark_labels enable</code>：是否enble，<code>basic_block register</code>，<font color="red">細節完全看不懂</font>。只知道和debug line number entry有關。</li>
+<li><code>.stabs symbol, type, other, desc, value</code>：用來提供資訊給symbolic debuger。詳細資訊請看<a href="https://sourceware.org/binutils/docs/as/Stab.html#Stab">手冊</a></li>
+<li><code>.tag structname</code>：compiler產生的輔助directive。用來從symbol table中找出<code>structname</code>的instance。</li>
+<li><code>.val addr</code>：看不懂。自己看<a href="https://sourceware.org/binutils/docs/as/Val.html#Val">手冊</a>。看起來是紀錄<code>addr</code>的值，但是怎麼會和symbol table扯上關係？？</li>
+</ul>
+
+
+<p><a name="as_dit_misc"></a></p>
+
+<h3>未分類</h3>
+
+<ul>
+<li><code>.include "file"</code>：從目前的位置，把<code>file</code>全部原封不動地放到之後的位置。</li>
+<li><code>.align abs-expr1, abs-expr2, abs-expr3</code>：<code>local counter</code> (請參考前面linker script文)結束要對齊的位址倍數。
+
+<ul>
+<li><code>abs-expr1</code>：必填。要對齊的數字。根據CPU，數字代表可能是byte，有些代表的是bit。所以要對齊8有的CPU要填8，有些CPU要填3。心理的OS，欠揍。</li>
+<li><code>abs-expr2</code>：optional。如果需要填空，可以指定填入的數值。不填就使用預設值，0。</li>
+<li><code>abs-expr3</code>：optional。指定跳過數字最多可以幾個，超過就直接不對齊了。<font color="red">(手冊用skip而不用pad讓我在想這到底差別在那？)</font></li>
+</ul>
+</li>
+</ul>
+
+
+<p>如果後面兩個都不想填，可以直接下<code>.align abs-expr1,,</code>收工。</p>
+
+<ul>
+<li><p><code>.comm symbol, length</code>：我是這樣理解啦，就是很多C語言檔案要用同一個全域變數。先摸到的先贏。可以看<a href="http://wen00072.github.io/blog/2014/12/09/global-variables-from-common-symbol-on-the-c-programming-language/">我以前整理</a>的說明。另外有兩點要注意</p>
+
+<ul>
+<li>如果有同樣的symbol，在不同檔案中，設定的長度又不同，gas會選最大的。</li>
+<li>ELF有隱藏的第3參數，用來指定alignment。</li>
+</ul>
+</li>
+<li><p><code>.gnu_attribute tag, value</code>：GNU屬性<a href="https://sourceware.org/binutils/docs/as/GNU-Object-Attributes.html#GNU-Object-Attributes">自己查</a></p></li>
+<li><code>.ident 字串</code>：不同binary format有不同處理，在ELF中會把字串放到<code>.comment</code> section中。要注意，<code>file</code>包括command line參數中<code>-I</code>指定的路徑。</li>
+<li><code>.incbin "file"[,skip[,count]]</code>：從目前的位置，把<code>file</code>原封不動地放到之後的位置。你可以透過<code>skip</code>指定從檔案起始地幾個byte後跳過。另外你也可以透過<code>count</code>指定檔案最多include幾個bytes。</li>
+</ul>
+
+
+<p>另外一點要注意，<code>file</code>包括command line參數中<code>-I</code>指定的路徑。</p>
+
+<ul>
+<li><code>.version "string"</code>：產生<code>.note</code> section並且將字串放入該section。</li>
+</ul>
+
+
+<p><a name="as_ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="https://sourceware.org/binutils/docs/as/index.html#Top">Using as</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: 組裝 | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/zu-zhuang/atom.xml" rel="self"/>
+  <link href="http://wen00072.github.io/"/>
+  <updated>2016-07-25T12:05:47+08:00</updated>
+  <id>http://wen00072.github.io/</id>
+  <author>
+    <name><![CDATA[Wen Liao]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[使用strace找出程式缺少的檔案路徑]]></title>
+    <link href="http://wen00072.github.io/blog/2016/04/10/use-strace-to-trace-missing-files/"/>
+    <updated>2016-04-10T01:14:38+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/04/10/use-strace-to-trace-missing-files</id>
+    <content type="html"><![CDATA[<p>這算極短篇。在組裝別人軟體的時候，常常出現缺少檔案的錯誤，運氣不好的不會跟你說缺少的檔案的期待路徑；運氣更差的就會連錯誤都不印，直接程式crash。我後來知道strace之後，才發覺它可以結省很多印log和trace程式碼的時間。</p>
+
+<p>這次就以前一篇執行openocd遇到的問題為例：第一次編譯openocd後，直接執行會出現找不到openocd.cfg檔案。經過一些試誤後才有上一篇整理出來的指令。</p>
+
+<p>錯誤訊息如下</p>
+
+<pre><code>$ openocd 
+Open On-Chip Debugger 0.10.0-dev-00250-g9c37747 (2016-04-07-22:20)
+Licensed under GNU GPL v2
+For bug reports, read
+    http://openocd.org/doc/doxygen/bugs.html
+embedded:startup.tcl:60: Error: Can't find openocd.cfg
+in procedure 'script' 
+at file "embedded:startup.tcl", line 60
+Error: Debug Adapter has to be specified, see "interface" command
+embedded:startup.tcl:60: Error: 
+in procedure 'script' 
+at file "embedded:startup.tcl", line 60
+</code></pre>
+
+<p>用strace 觀察輸出訊息如下：</p>
+
+<pre><code>$ strace -f openocd 2&gt;&amp;1  | grep cfg
+open("openocd.cfg", O_RDONLY)           = -1 ENOENT (No such file or directory)
+open("/home/asdf/.openocd/openocd.cfg", O_RDONLY) = -1 ENOENT (No such file or directory)
+open("/usr/local/share/openocd/site/openocd.cfg", O_RDONLY) = -1 ENOENT (No such file or directory)
+open("/usr/local/share/openocd/scripts/openocd.cfg", O_RDONLY) = -1 ENOENT (No such file or directory)
+write(2, "embedded:startup.tcl:60: Error: "..., 118embedded:startup.tcl:60: Error: Can't find openocd.cfg
+</code></pre>
+
+<p>從輸出訊息可以知道，openocd會依下面的順序讀取openocd.cfg</p>
+
+<ul>
+<li>目前目錄的openocd.cfg</li>
+<li>~/.openocd/openocd.cfg</li>
+<li>/usr/local/share/openocd/site/openocd.cfg</li>
+<li>/usr/local/share/openocd/scripts/openocd.cfg</li>
+</ul>
+
+
+<p>所以接下來就是在openocd的原始碼中挑和你開發target可以使用config 檔案，放入~/.openocd、改成openocd.cfg。當然事情沒那麼簡單，解掉這個問題接下來還會有一些缺少檔案的問題，一樣靠strace就可以搞定。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[C語言在Linux下組裝經驗分享]]></title>
+    <link href="http://wen00072.github.io/blog/2013/11/29/c-language-assembler-under-linux-sharing/"/>
+    <updated>2013-11-29T14:19:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2013/11/29/c-language-assembler-under-linux-sharing</id>
+    <content type="html"><![CDATA[<p>整理組裝經驗如下，全部是Command line的文字模式</p>
+
+<ul>
+<li><a href="#%E9%9D%9ERuntime">非Runtime</a>
+
+<ul>
+<li><a href="#nr1">找出static library symbols</a></li>
+<li><a href="#nr2">找出library搜尋路徑</a></li>
+<li><a href="#nr3">列出CC 預設define和相關資訊</a></li>
+</ul>
+</li>
+<li><a href="#Runtime">Runtime</a>
+
+<ul>
+<li><a href="#r1">dump console 輸出文字</a></li>
+<li><a href="#r2">當dynamic library 不在/無法放到linker搜尋路徑造成檔案無法執行</a></li>
+<li><a href="#r3">看程式system call的行為</a></li>
+<li><a href="#r4">Linker/loader 相關</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99">參考資料</a></li>
+</ul>
+
+
+<hr />
+
+<p><a name="非Runtime"></a></p>
+
+<h2>非Runtime</h2>
+
+<p><a name="nr1"></a></p>
+
+<ul>
+<li>找出static library symbols
+
+<ul>
+<li><code>find | grep *\\.a$ | xargs nm -A | grep 要找的symbol</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="nr2"></a></p>
+
+<ul>
+<li>找出library搜尋路徑
+
+<ul>
+<li><code>ld --verbose | grep SEARCH | tr "; " "\n\r"</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="nr3"></a></p>
+
+<ul>
+<li>列出CC 預設define和相關資訊
+
+<ul>
+<li><code>echo "" | gcc -E -xc - -dM -v</code></li>
+</ul>
+</li>
+<li>grep 加regular expression萬歲</li>
+</ul>
+
+
+<hr />
+
+<p><a name="Runtime"></a></p>
+
+<h2>Runtime</h2>
+
+<p><a name="r1"></a></p>
+
+<ul>
+<li><p>dump console 輸出文字</p>
+
+<ul>
+<li>script
+
+<ul>
+<li><code>script 文字輸出檔檔名</code></li>
+<li>操作</li>
+<li>按<code>ctrl+d</code>結束dump</li>
+</ul>
+</li>
+<li>執行檔 2>&amp;1 | tee 輸出檔名
+
+<ul>
+<li>變形
+
+<ul>
+<li>執行檔 2>&amp;1 | grep 想找的文字 | tee 輸出檔名
+<a name="r2"></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>當dynamic library 不在/無法放到linker搜尋路徑造成檔案無法執行</p>
+
+<ul>
+<li>$<code>LD_LIBRARY_PATH=$LD_LIBRARY_PATH:你的library路徑 執行檔</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="r3"></a></p>
+
+<ul>
+<li>看程式system call的行為
+
+<ul>
+<li><code>strace 執行檔</code></li>
+<li><code>strace -e open 執行檔</code>
+
+<ul>
+<li>看open system call，常用，因為有時候程式爛掉是因為開檔案失敗，用這個找很快</li>
+</ul>
+</li>
+<li><code>strace -f 執行檔</code>
+
+<ul>
+<li>包含fork的process</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="r4"></a></p>
+
+<ul>
+<li>Linker/Loader 相關
+
+<ul>
+<li>ld.so會和路徑以及平台相關，以Ubuntu LTS 12.04 X86有
+
+<ul>
+<li>/lib64/ld-linux-x86-64.so.2
+
+<ul>
+<li>64-bit</li>
+</ul>
+</li>
+<li>/lib/ld-linux.so.2
+
+<ul>
+<li>32-bit</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>透過dynamic linker/loader 看檔案link的library
+
+<ul>
+<li><code>LD_TRACE_LOADED_OBJECTS=1 ld.so 執行檔</code></li>
+</ul>
+</li>
+<li>觀察dynamic linker/loader行為
+
+<ul>
+<li><code>LD_DEBUG=help /bin/ls</code>
+
+<ul>
+<li>顯示選項</li>
+</ul>
+</li>
+<li><code>LD_DEBUG=all 執行檔</code>
+
+<ul>
+<li>全部都顯示</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>合體
+
+<ul>
+<li><code>LD_DEBUG=all strace -f ld.so strace -f 執行檔</code></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="參考資料"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><code>man ld.so</code></li>
+<li><a href="http://tldp.org/HOWTO/Program-Library-HOWTO/shared-libraries.html">TLDP: Shared Libraries</a></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>
