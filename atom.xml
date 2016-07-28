@@ -4,7 +4,7 @@
   <title><![CDATA[My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-07-25T12:05:47+08:00</updated>
+  <updated>2016-07-28T23:14:01+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -200,7 +200,7 @@
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>請注意SPL可能會因為下載版本不同，變數宣告、常數宣告、和檔案名稱路徑可能不同，這時候就當練習組裝技巧吧。</p>
+<p>請注意SPL可能會因為下載版本不同，變數宣告、常數宣告、和檔案名稱路徑可能不同造成編譯失敗，這時候就當組裝作業自己解決吧。</p>
 
 <p><a name="STM_MK"></a></p>
 
@@ -372,7 +372,7 @@ STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>ar
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 </pre></td><td class='code'><pre><code class='Makefile'><span class='line'><span class="nv">TARGET</span><span class="o">=</span>led
-</span><span class='line'><span class="nv">PRJ_ROOT</span><span class="o">=</span>../..
+</span><span class='line'><span class="nv">PRJ_ROOT</span><span class="o">=</span><span class="k">$(</span>shell <span class="nb">cd</span> ../../ <span class="p">;</span> <span class="nb">pwd</span><span class="k">)</span>
 </span><span class='line'><span class="cp">include $(PRJ_ROOT)/conf/build.def</span>
 </span></code></pre></td></tr></table></div></figure>
 

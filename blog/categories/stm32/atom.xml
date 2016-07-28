@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Stm32 | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/stm32/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-07-25T12:05:47+08:00</updated>
+  <updated>2016-07-28T23:14:01+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -144,7 +144,7 @@ arm-none-eabi-gcc (GNU Tools for ARM Embedded Processors) 5.4.1 20160609 (releas
 └── README.md
 </code></pre>
 
-<p>請注意SPL可能會因為下載版本不同，變數宣告、常數宣告、和檔案名稱路徑可能不同，這時候就當練習組裝技巧吧。</p>
+<p>請注意SPL可能會因為下載版本不同，變數宣告、常數宣告、和檔案名稱路徑可能不同造成編譯失敗，這時候就當組裝作業自己解決吧。</p>
 
 <p><a name="STM_MK"></a></p>
 
@@ -254,7 +254,7 @@ CFLAGS += -fno-common -ffreestanding -O0
 
 
 <pre><code class="Makefile">TARGET=led
-PRJ_ROOT=../..
+PRJ_ROOT=$(shell cd ../../ ; pwd)
 include $(PRJ_ROOT)/conf/build.def
 </code></pre>
 
