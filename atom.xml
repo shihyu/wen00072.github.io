@@ -4,7 +4,7 @@
   <title><![CDATA[My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-02T17:24:02+08:00</updated>
+  <updated>2016-08-02T17:39:49+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -25,6 +25,7 @@
 <ol>
 <li>開了<code>processed_pictures</code>目錄，把改過的檔案存到該目錄</li>
 <li>將新的圖案解析度寬度轉成1024</li>
+<li>將quality設成80%</li>
 <li>加入浮水印字串</li>
 </ol>
 
@@ -55,8 +56,9 @@
 <p>要注意</p>
 
 <ol>
-<li>本script假設目前目錄都是圖檔，所以不判斷檔名是否為<code>.jpg</code>或是<code>.png</code>。</li>
-<li><p>由於相片landscape 和 portrait的關係，浮水印的位址不一定會和你想的一樣，目前為止我不在意這個問題就是了。附上範例轉出的landscape 和 portrait照片各一張。</p></li>
+<li>本script假設目前目錄都是圖檔，所以不判斷檔名是否為<code>.jpg</code>或是<code>.png</code></li>
+<li>無法處理檔名有空白的檔案</li>
+<li><p>由於相片landscape 和 portrait的關係，浮水印的位址不一定會和你想的一樣，目前為止我不在意這個問題就是了。附上範例轉出的landscape 和 portrait照片各一張</p></li>
 <li><p>Landscape</p></li>
 </ol>
 
