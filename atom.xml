@@ -4,7 +4,7 @@
   <title><![CDATA[My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-04T10:37:47+08:00</updated>
+  <updated>2016-08-05T14:45:53+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -74,8 +74,8 @@
 <h2>參考資料</h2>
 
 <ul>
-<li>[Linux Journal]Easy Watermarking with ImageMagick
-](<a href="http://www.linuxjournal.com/content/easy-watermarking-imagemagick">http://www.linuxjournal.com/content/easy-watermarking-imagemagick</a>)</li>
+<li><a href="http://www.linuxjournal.com/content/easy-watermarking-imagemagick">Linux Journal Easy Watermarking with ImageMagick</a></li>
+<li><a href="http://www.xoogu.com/2013/how-to-automatically-watermark-or-batch-watermark-photos-using-imagemagick/">How to automatically watermark or batch watermark photos using ImageMagick</a></li>
 </ul>
 
 ]]></content>
