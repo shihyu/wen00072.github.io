@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Arm | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/arm/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-05T14:45:53+08:00</updated>
+  <updated>2016-08-06T01:50:35+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -12,6 +12,466 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ARM CM4 Pratice (3): USART 初探]]></title>
+    <link href="http://wen00072.github.io/blog/2016/08/05/arm-cm4-pratice-3-lab-usart/"/>
+    <updated>2016-08-05T15:53:47+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/08/05/arm-cm4-pratice-3-lab-usart</id>
+    <content type="html"><![CDATA[<h2>致謝</h2>
+
+<p>感謝網友<a href="https://github.com/starnight">Zack</a>，<a href="http://vh21.github.io/">Villar</a>，學弟Joe Ho，還有其他大大的幫忙，不然這次應該是撞牆撞到死吧。</p>
+
+<h2>前言</h2>
+
+<p>這次實驗有卡關，不然其實不算難。卡關的點如下：</p>
+
+<ul>
+<li>一開始使用USART1，可是USART1接到STLink 接腳，最後用USART6代替。(<a href="http://www.st.com/content/st_com/en/products/evaluation-tools/product-evaluation-tools/mcu-eval-tools/stm32-mcu-eval-tools/stm32-mcu-discovery-kits/32f429idiscovery.html">STM32F4 Discovry Disco 開發版手冊</a>，p19, SB11那段)</li>
+<li>SPL的HSE 設定和版子不合，造成Baud rate計算錯誤。</li>
+</ul>
+
+
+<p>這次的實驗是一個ECHO程式，透過版子上的USART6和電腦連線，電腦送出什麼字元，版子就傳回什麼字元。</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#stm-3-prepare">事前準備</a></li>
+<li><a href="#stm-3-usart">USART 控制</a></li>
+<li><a href="#stm-3-code">程式碼</a>
+
+<ul>
+<li><a href="#stm-3-code-code">完整程式碼</a></li>
+<li><a href="#stm-3-code-make">Makefile</a></li>
+</ul>
+</li>
+<li><a href="#stm-3-test">功能驗證</a></li>
+<li><a href="#stm-3-ref">參考資料</a></li>
+</ul>
+
+
+<p><a name="stm-3-prepare"></a></p>
+
+<h2>事前準備</h2>
+
+<ul>
+<li><p>Saleae 邏輯分析儀 (一千新台幣有找）</p>
+
+<ul>
+<li>需要自行到Saleae官方網站下載安裝Linux版軟體
+<img src="http://wen00072.github.io/files/stm32/STM_LG.jpg"/></li>
+</ul>
+</li>
+<li><p>USB 轉 RS232 TTL 轉接線
+<img src="http://wen00072.github.io/files/banana_pi/DSC_0026.jpg"/></p></li>
+</ul>
+
+
+<p><a name="stm-3-usart"></a></p>
+
+<h2>USART 控制</h2>
+
+<p>對於組裝工來說，我需要理解的不是電位差之這些電器信號。甚至在組裝時我也不在意暫存器設定等東西和背後的原理（好孩子不要學）。我關心的是</p>
+
+<ol>
+<li>我們要用哪些資源？</li>
+<li>這些資源對應的實體腳位是？</li>
+<li>軟體中怎麼樣設定和啟動設備？</li>
+<li>軟體中怎麼樣傳輸資料？</li>
+</ol>
+
+
+<p>我們針對這四個問題一一處理</p>
+
+<h3>我們要用哪些資源？</h3>
+
+<p>從手冊可以看到有八個USART可以用。我原本是挑USART1來用，不過後來卡關經過網友提醒發現要避開USART1。後來發現APB2上面除了USART1外另外一個USART是USART6。懶得太多程式碼的情況下就挑了USART6。</p>
+
+<h3>這些資源對應的實體腳位是？</h3>
+
+<p>一樣要翻手冊。</p>
+
+<ul>
+<li>PC6: UASRT6 TX</li>
+<li>PC7: USART6 RX</li>
+</ul>
+
+
+<h3>軟體中怎麼樣設定和啟動設備？</h3>
+
+<p>要分兩個部份討論</p>
+
+<h4>a. GPIOC 設定</h4>
+
+<p>要設定</p>
+
+<ul>
+<li>開啟GPIOC的clock</li>
+<li>設定Pin腳，設定PC6和PC7這兩個腳位。為什麼是這兩個腳位請查手冊
+
+<ul>
+<li>PC6: 設成Alternate function，也就是USART6 TX</li>
+<li>PC7: 設成Alternate function，也就是USART6 RX</li>
+<li>其他
+
+<ul>
+<li>設定為Pull UP，這和USART通訊協定有關，在IDLE時維持高電位</li>
+<li>設定Push-Pull輸出模式，這個我完全不懂只是閉著眼睛抄的</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<p>來看大家最討厭看的程式碼片斷吧</p>
+
+<pre><code class="c">    GPIO_InitTypeDef GPIO_InitStructure;
+
+    /* Enable GPIOC clock */
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
+
+    /* Connect USART6_Tx instead of PC6 */
+    GPIO_PinAFConfig(GPIOC, GPIO_PinSource6, GPIO_AF_USART6);
+
+    /* Connect USART6_Rx instead of PC7 */
+    GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_USART6);
+
+    /* Configure USART Tx (PC6) and Rx (PC7) as alternate function  */
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+
+    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
+
+    GPIO_Init(GPIOC, &amp;GPIO_InitStructure);
+</code></pre>
+
+<h4>b. USART6 設定</h4>
+
+<p>依下列步驟</p>
+
+<ol>
+<li>開啟USART6的clock</li>
+<li>設定USART6
+
+<ul>
+<li>115200 BPS</li>
+<li>No parity bit</li>
+<li>8-bit 資料</li>
+<li>1 Stop bit</li>
+<li>關閉硬體流量控制</li>
+<li>TX/RX模式都打開</li>
+</ul>
+</li>
+<li>啟動UASRT6</li>
+</ol>
+
+
+<p>一樣來看大家最討厭看的程式碼片斷吧</p>
+
+<pre><code class="c">    USART_InitTypeDef USART_InitStruct;
+
+    /* Enable USART6 clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART6, ENABLE);
+
+    /* 115200, N81  */
+    USART_InitStruct.USART_BaudRate = 115200;
+    USART_InitStruct.USART_WordLength = USART_WordLength_8b;
+    USART_InitStruct.USART_StopBits = USART_StopBits_1;
+    USART_InitStruct.USART_Parity = USART_Parity_No;
+    USART_InitStruct.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStruct.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+    /* Apply USART settings */
+    USART_Init(USART6, &amp;USART_InitStruct);
+
+    /* Enable USART */
+    USART_Cmd(USART6, ENABLE);
+</code></pre>
+
+<h3>軟體中怎麼樣傳輸資料？</h3>
+
+<p>這部份還蠻直覺的，就是檢查狀態。可以送的時候就寫資料到暫存器去；有資料時從暫存器讀出資料。程式碼夠短應該不會那麼討厭吧？另外SPL也有提供USART傳輸接收的函數，請自行查詢。</p>
+
+<pre><code class="c">
+char getchar(void)
+{
+    while(USART_GetFlagStatus(USART6, USART_FLAG_RXNE) == RESET);
+    return USART6-&gt;DR &amp; 0xff;
+}
+
+void putchar(char c)
+{
+    /* Wait until data was tranferred */
+    while(USART_GetFlagStatus(USART6, USART_FLAG_TXE) == RESET);
+
+    USART6-&gt;DR = (c &amp; 0xff);
+}
+</code></pre>
+
+<p><a name="stm-3-code"></a></p>
+
+<h2>程式碼</h2>
+
+<p>最完整可編譯程式碼放在<a href="https://github.com/zzz0072/STM32F429-Discovery-Disco-Pratice/tree/master/labs/1_usart">這邊</a>。</p>
+
+<p>前面有提到HSE設定需要更動為8MHz。我是在<code>stm32f4xx_conf.h</code>加入以下片斷。</p>
+
+<pre><code class="c">
+#if defined  (HSE_VALUE)
+/* Redefine the HSE value; it's equal to 8 MHz on the STM32F4-DISCOVERY Kit */
+ #undef HSE_VALUE
+ #define HSE_VALUE    ((uint32_t)8000000) 
+#endif /* HSE_VALUE */
+</code></pre>
+
+<p><a name="stm-3-code-code"></a></p>
+
+<h3>完整程式碼</h3>
+
+<p>就是把前面的設定合體再加上一些helper就是了。這個程式也不難，就是印出你打的字。當你按enter後會自動塞入<code>\r</code>並且印出提示符號。</p>
+
+<pre><code class="c usart.c">#include "stm32f4xx_conf.h"
+#include &lt;stm32f4xx.h&gt;
+#include &lt;stm32f4xx_gpio.h&gt;
+#include &lt;stm32f4xx_usart.h&gt;
+
+void setupUSART(void);
+
+/* helper functions */
+void print(char *str);
+char getchar(void);
+void putchar(char c);
+
+int main(int argc, char **argv)
+{
+    /* Setup USART */
+    setupUSART();
+
+    /* Greeting */
+    print("Hello World\n");
+    print("\r&gt; ");
+    while(1) {
+        /* Echo a character */
+        char c = getchar();
+        putchar(c);
+
+        /* Show prompt with enter */
+        if (c == '\n') {
+            print("\r&gt; ");
+        }
+    }
+
+    return 0;
+}
+
+void setupUSART(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    /* Enable GPIOC clock */
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
+
+    /* Connect USART6_Tx instead of PC6 */
+    GPIO_PinAFConfig(GPIOC, GPIO_PinSource6, GPIO_AF_USART6);
+
+    /* Connect USART6_Rx instead of PC7 */
+    GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_USART6);
+
+    /* Configure USART Tx (PC6) and Rx (PC7) as alternate function  */
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+
+    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
+
+    GPIO_Init(GPIOC, &amp;GPIO_InitStructure);
+
+    /********************************************
+     * USART set started here
+     ********************************************/
+    USART_InitTypeDef USART_InitStruct;
+
+    /* Enable USART6 clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART6, ENABLE);
+
+    /* 115200, N81  */
+    USART_InitStruct.USART_BaudRate = 115200;
+    USART_InitStruct.USART_WordLength = USART_WordLength_8b;
+    USART_InitStruct.USART_StopBits = USART_StopBits_1;
+    USART_InitStruct.USART_Parity = USART_Parity_No;
+    USART_InitStruct.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStruct.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+    /* Apply USART settings */
+    USART_Init(USART6, &amp;USART_InitStruct);
+
+    /* Enable USART */
+    USART_Cmd(USART6, ENABLE);
+}
+
+char getchar(void)
+{
+    while(USART_GetFlagStatus(USART6, USART_FLAG_RXNE) == RESET);
+    return USART6-&gt;DR &amp; 0xff;
+}
+
+void putchar(char c)
+{
+    /* Wait until data was tranferred */
+    while(USART_GetFlagStatus(USART6, USART_FLAG_TXE) == RESET);
+
+    USART6-&gt;DR = (c &amp; 0xff);
+}
+
+void print(char *str)
+{
+    assert_param(str != 0);
+    while(*str) {
+        putchar(*str);
+        str++;
+    }
+}
+
+/* Trap here for gdb if asserted */
+void assert_failed(uint8_t* file, uint32_t line)
+{
+    while(1);
+}
+</code></pre>
+
+<p><a name="stm-3-code-make"></a></p>
+
+<h3>Makefile</h3>
+
+<p>有兩點要說明</p>
+
+<ol>
+<li>加入<code>stm32f4xx_usart.c</code></li>
+<li>加入make flash自動燒錄
+
+<ul>
+<li>目前發現使用st-flash燒錄有時候顯示燒錄完成，但是實際上測試還是燒錄前的行為，換成openocd測試中</li>
+</ul>
+</li>
+</ol>
+
+
+<pre><code class="Makefile">#----------------------------------------------------------------------------------
+# Commom settings
+#----------------------------------------------------------------------------------
+TARGET=usart
+PRJ_ROOT=$(shell cd ../../ ; pwd)
+include $(PRJ_ROOT)/conf/build.def
+
+#----------------------------------------------------------------------------------
+# Files to build
+#----------------------------------------------------------------------------------
+SRCS  = $(CMSIS_STARTUP_SRC) $(CMSIS_SYSTEM_SRC)
+SRCS += $(STM_DIR)/src/stm32f4xx_gpio.c
+SRCS += $(STM_DIR)/src/stm32f4xx_rcc.c
+SRCS += $(STM_DIR)/src/stm32f4xx_usart.c
+SRCS += usart.c
+
+C_OBJS = $(patsubst %.c, %.o, $(SRCS))   # translate *.c to *.o
+OBJS   = $(patsubst %.s, %.o, $(C_OBJS)) # also *.s to *.o files
+
+OUT_OBJS = $(addprefix $(OUT_DIR)/, $(OBJS))
+
+#----------------------------------------------------------------------------------
+# Build here
+#----------------------------------------------------------------------------------
+$(OUT_DIR)/$(TARGET).bin: $(OUT_OBJS)
+    $(TOOL_CHAIN_PREFIX)-gcc -Wl,-Map=$(OUT_DIR)/$(TARGET).map,-T$(TARGET).ld -nostartfiles \
+        $(CFLAGS) $(OUT_OBJS) -o $(OUT_DIR)/$(TARGET).elf
+    $(TOOL_CHAIN_PREFIX)-objcopy -Obinary $(OUT_DIR)/$(TARGET).elf $@
+    $(TOOL_CHAIN_PREFIX)-objdump -S $(OUT_DIR)/$(TARGET).elf &gt; $(OUT_DIR)/$(TARGET).list
+
+$(OUT_DIR)/%.o: %.s
+    mkdir -p $(dir $@)
+    $(TOOL_CHAIN_PREFIX)-gcc -c $(CFLAGS) $&lt; -o $@
+
+$(OUT_DIR)/%.o: %.c
+    mkdir -p $(dir $@)
+    $(TOOL_CHAIN_PREFIX)-gcc -c $(CFLAGS) $&lt; -o $@
+
+flash: $(OUT_DIR)/$(TARGET).bin
+    openocd -f interface/stlink-v2.cfg  \
+            -f target/stm32f4x.cfg      \
+            -c "init"                   \
+            -c "reset init"             \
+            -c "stm32f2x unlock 0"      \
+            -c "flash probe 0"          \
+            -c "flash info 0"           \
+            -c "flash write_image erase $&lt; 0x8000000" \
+            -c "reset run" -c shutdown
+
+clean:
+    rm -fr $(OUT_DIR) gdb.txt
+</code></pre>
+
+<p><a name="stm-3-test"></a></p>
+
+<h2>功能驗證</h2>
+
+<h3>邏輯分析儀驗證</h3>
+
+<p>現在邏輯分析儀已經可以自動幫你抓波形分析了。當你下載並解壓縮檔案後，記得更新udev的Rule讓電腦可以認得邏輯分析儀。</p>
+
+<p>接下來你要設定邏輯分析儀的分析通訊協定為Async Serial 如下圖
+<img src="http://wen00072.github.io/files/stm32/LG_SP1.jpg"/></p>
+
+<p>選了Async Serial會有選單出現，你需要設定用第幾個Channel以及USART通訊參數如下圖
+<img src="http://wen00072.github.io/files/stm32/LG_SP2.jpg"/></p>
+
+<p>如果需要的話，你可以進一步設定取樣速度、取樣時間如下圖
+<img src="http://wen00072.github.io/files/stm32/LG_SP3.jpg"/></p>
+
+<p>假設你的邏輯分析儀接腳都接好了就可以按開始分析訊號了
+<img src="http://wen00072.github.io/files/stm32/LG_SP4.jpg"/></p>
+
+<p>這是一個成功的Hello World波形分析，圖可能有點小，全圖在<a href="/files/stm32/usart2.jpg">這邊</a>。
+<img src="http://wen00072.github.io/files/stm32/usart2.jpg"/></p>
+
+<h3>實際驗證</h3>
+
+<p>你需要先把USB 轉 RS232 TTL 轉接線接到版子上如下圖
+<img src="http://wen00072.github.io/files/stm32/STM_USART_Pin.jpg"/></p>
+
+<p>我是使用mintern，執行畫面如下</p>
+
+<pre><code class="text">$ miniterm.py -b 115200 -p /dev/ttyUSB0 
+--- Miniterm on /dev/ttyUSB0: 115200,8,N,1 ---
+--- Quit: Ctrl+]  |  Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H ---
+test
+&gt; test
+&gt; test
+&gt; test
+&gt; testast
+&gt; teadsatdsasd
+</code></pre>
+
+<p><a name="stm-3-ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="http://homes.soic.indiana.edu/geobrown/index.cgi/teaching">Geoffrey Brown: Teaching </a>
+
+<ul>
+<li>請找 Lab Manual 裏面的link, 書名是<code>Discovering the STM32 Microcontroller</code></li>
+</ul>
+</li>
+<li><a href="http://www.st.com/content/st_com/en/products/evaluation-tools/product-evaluation-tools/mcu-eval-tools/stm32-mcu-eval-tools/stm32-mcu-discovery-kits/32f429idiscovery.html">STM32F4 Discovry Disco 開發版手冊</a></li>
+<li><a href="http://www.st.com/content/st_com/en/products/embedded-software/mcus-embedded-software/stm32-embedded-software/stm32-standard-peripheral-libraries/stsw-stm32065.html">STM32F4 DSP and standard peripherals library</a></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ARM CM4 Pratice (2): 實驗軟體專案規劃和LED閃滅實驗]]></title>
@@ -1902,527 +2362,6 @@ int main(void)
 ...
 }
 </code></pre>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Hello Linux ARM 組合語言]]></title>
-    <link href="http://wen00072.github.io/blog/2015/04/22/hello-assembly/"/>
-    <updated>2015-04-22T21:34:16+08:00</updated>
-    <id>http://wen00072.github.io/blog/2015/04/22/hello-assembly</id>
-    <content type="html"><![CDATA[<h2>目錄</h2>
-
-<ul>
-<li><a href="#hello-asm-syntax">前言</a></li>
-<li><a href="#hello-asm-env">測試環境</a></li>
-<li><a href="#hello-asm-ex1">範例：版本一</a></li>
-<li><a href="#hello-asm-ex2">範例：版本二</a></li>
-<li><a href="#hello-asm-ex3">範例：版本三</a></li>
-<li><a href="#hello-asm-ex4">範例：版本四</a></li>
-<li><a href="#hello-asm-conl">總結</a></li>
-<li><a href="#hello-asm-ext">延伸閱讀及致謝</a></li>
-<li><a href="#hello-asm-ref">參考資料</a></li>
-</ul>
-
-
-<p><a name="hello-asm-syntax"></a></p>
-
-<h2>前言</h2>
-
-<p>之前的文章有不少在討論執行檔該長怎麼樣。簡單來說，一個執行檔會有</p>
-
-<ul>
-<li>Sections：程式行為和資料會分開放在不同的sections</li>
-<li>進入點，也就是system call開始執行你的程式的地方</li>
-</ul>
-
-
-<p>以這樣的觀點，來看組合語言，會比較有感覺。</p>
-
-<p>這次主要想要試看看如何使用組合語言印出Hello world。學過作業系統的朋友應該知道OS真正提供給使用者的介面叫作system call。有興趣的朋友可以使用<code>strace</code>研究執行檔呼叫了那些system call。這次的Hello world我有兩個線索</p>
-
-<ul>
-<li>在command line執行的process會有3個馬上可以使用的file descriptor（不知道那啥的請自行估狗）分別是
-
-<ul>
-<li><code>0</code>: standard in</li>
-<li><code>1</code>: standard out</li>
-<li><code>2</code>: standard error</li>
-</ul>
-</li>
-<li>有一個system call叫作<code>write</code>，你可以透過他把任何資料寫到指令的file descriptor</li>
-</ul>
-
-
-<p>綜合以上，我們要幹的事就是透過組合語言做出</p>
-
-<pre><code class="c">write(1, "Hello world\n", 12);
-</code></pre>
-
-<p>這又表示組合語言中我們要做</p>
-
-<ul>
-<li>呼叫system call</li>
-<li>帶參數給system call，這部份需要有
-
-<ul>
-<li>ABI的背景知識</li>
-<li>定址方式，更精確的說，如何宣告<code>"Hello world\n"</code>，讓runtime時放在在process address space中，並將它的位址傳給system call</li>
-</ul>
-</li>
-</ul>
-
-
-<p><a name="hello-asm-env"></a></p>
-
-<h2>測試環境</h2>
-
-<ul>
-<li><p>Host
-<code>text
-$ lsb_release -a
-No LSB modules are available.
-Distributor ID: Ubuntu
-Description:    Ubuntu 14.04.2 LTS
-Release:    14.04
-Codename:   trusty
-</code></p></li>
-<li><p>Guest OS on Qemu</p>
-
-<ul>
-<li>這邊很奇怪我的kernel用更新過的版本Qemu完全無法開機。目前裝死中。
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ lsb_release -a
-</span><span class='line'>No LSB modules are available.
-</span><span class='line'>Distributor ID: Debian
-</span><span class='line'>Description:    Debian GNU/Linux 8.0 (jessie)
-</span><span class='line'>Release:    8.0
-</span><span class='line'>Codename:   jessie&lt;/li&gt;
-</span><span class='line'>&lt;/ul&gt;
-</span><span class='line'>&lt;/li&gt;
-</span><span class='line'>&lt;/ul&gt;
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ cat /proc/cpuinfo
-</span><span class='line'>Processor   : ARM926EJ-S rev 5 (v5l)
-</span><span class='line'>BogoMIPS    : 643.48
-</span><span class='line'>Features    : swp half thumb fastmult vfp edsp java
-</span><span class='line'>CPU implementer : 0x41
-</span><span class='line'>CPU architecture: 5TEJ
-</span><span class='line'>CPU variant : 0x0
-</span><span class='line'>CPU part    : 0x926
-</span><span class='line'>CPU revision    : 5&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;Hardware    : ARM-Versatile AB
-</span><span class='line'>Revision    : 0000
-</span><span class='line'>Serial      : 0000000000000000
-</span></code></pre></td></tr></table></div></figure></p>
-
-<p><a name="hello-asm-ex1"></a></p>
-
-<h2>範例：版本一</h2>
-
-<p>我本來想說慢慢來，先來個完全沒意義的r0 = 0; r1 = 1; r2 = r0 + r1。程式如下：
-<code>asm hello.s
-.text
-.global _start
-_start:
-    mov %r0, $0
-    mov %r1, $1
-    add %r2, %r0, %r1
-.end
-</code>
-幾點說明：</p>
-
-<ul>
-<li><code>$</code>或是<code>#</code>代表一個數字(<a href="https://sourceware.org/binutils/docs/as/ARM_002dChars.html#ARM_002dChars">出處</a>)</li>
-<li><code>%r1</code>代表ARM的<code>r1</code>暫存器，但是為何用<code>%</code>目前沒找到手冊上有說明。</li>
-<li><code>.text</code>前面的文章有看應該覺得很眼熟，就是告訴編譯器以下是程式行為。</li>
-<li><code>global</code>是讓symbol可以外露，白話來說就是<code>nm</code>等binutil可以看的到這個symbol。</li>
-<li><code>_start</code>是一個程式執行的起始點，有看過<a href="http://wen00072.github.io/blog/2015/02/14/main-linux-whos-going-to-call-in-c-language/">之前文章</a>就會覺得很眼熟。</li>
-<li><p><a href="https://sourceware.org/binutils/docs/as/End.html#End">.end表示程式結束點</a>，不過目前用起來有沒有加好像沒有差別。</p></li>
-<li><p>Makefile</p></li>
-</ul>
-
-
-<pre><code class="makefile Makefile">TARGET=hello
-AS_FILE=$(addsuffix .s, $(TARGET))
-
-$(TARGET): $(AS_FILE)
-    $(AS) $^ -o $@
-
-clean:
-    rm -rf $(TARGET)
-</code></pre>
-
-<p>想法很簡單，就是直接編譯應該可以跑，雖然完全不會有畫面。<font color="red">錯！</font>跑出來會這樣</p>
-
-<pre><code class="text">$ make
-as hello.s -o hello
-
-$ ls -gG
-total 12
--rw-r--r-- 1 588 Apr 20 18:04 hello
--rw-r--r-- 1  83 Apr 20 17:58 hello.s
--rw-r--r-- 1 113 Apr 20 17:58 Makefile
-</code></pre>
-
-<p>這代表什麼，hello編譯完後的binary本身沒有執行權限。改改權限看可不可以跑？</p>
-
-<pre><code class="text">$ chmod +x hello
-$ ./hello 
-bash: ./hello: cannot execute binary file: Exec format error
-</code></pre>
-
-<p>怎麼回事？分析一下</p>
-
-<pre><code class="text">$ readelf hello -h
-ELF Header:
-  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
-  Class:                             ELF32
-  Data:                              2's complement, little endian
-  Version:                           1 (current)
-  OS/ABI:                            UNIX - System V
-  ABI Version:                       0
-  Type:                              REL (Relocatable file)
-  Machine:                           ARM
-  Version:                           0x1
-  Entry point address:               0x0
-  Start of program headers:          0 (bytes into file)
-  Start of section headers:          268 (bytes into file)
-  Flags:                             0x5000000, Version5 EABI
-  Size of this header:               52 (bytes)
-  Size of program headers:           0 (bytes)
-  Number of program headers:         0
-  Size of section headers:           40 (bytes)
-  Number of section headers:         8
-  Section header string table index: 5
-</code></pre>
-
-<p>看不出來對不對？我是這樣啦，所以先比對<code>/bin/ls</code>的輸出吧</p>
-
-<pre><code class="text">$ readelf /bin/ls -h
-ELF Header:
-  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
-  Class:                             ELF32
-  Data:                              2's complement, little endian
-  Version:                           1 (current)
-  OS/ABI:                            UNIX - System V
-  ABI Version:                       0
-  Type:                              EXEC (Executable file)
-  Machine:                           ARM
-  Version:                           0x1
-  Entry point address:               0x14354
-  Start of program headers:          52 (bytes into file)
-  Start of section headers:          99372 (bytes into file)
-  Flags:                             0x5000202, has entry point, Version5 EABI, soft-float ABI
-  Size of this header:               52 (bytes)
-  Size of program headers:           32 (bytes)
-  Number of program headers:         9
-  Size of section headers:           40 (bytes)
-  Number of section headers:         27
-  Section header string table index: 26
-</code></pre>
-
-<p>仔細看一下<code>Type:</code>，<code>/bin/ls</code>是<code>EXEC</code>而<code>hello</code>是<code>REL</code>，<code>man elf</code>可以看到<code>REL</code>是relocate file，那是啥呢？根據<a href="http://www.sco.com/developers/gabi/latest/contents.html">System V Application Binary Interface - DRAFT - 10 June 2013第四章的簡介</a>，簡單來說就是object檔案，也就是說link時吃的檔案。所以我們加入Link吧。</p>
-
-<p><a name="hello-asm-ex2"></a></p>
-
-<h2>範例：版本二</h2>
-
-<p>單純加入linker看看會怎樣？
-<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">TARGET</span><span class="o">=</span>hello
-</span><span class='line'><span class="nv">AS_FILE</span><span class="o">=</span><span class="k">$(</span>addsuffix .s, <span class="k">$(</span>TARGET<span class="k">))</span>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'><span class="nf">&lt;p&gt;$(TARGET)</span><span class="o">:</span> <span class="k">$(</span><span class="nv">AS_FILE</span><span class="k">)</span>
-</span><span class='line'>    <span class="k">$(</span>AS<span class="k">)</span> <span class="nv">$^</span> -o <span class="nv">$@</span>.o
-</span><span class='line'>    <span class="k">$(</span>LD<span class="k">)</span> <span class="nv">$@</span>.o -o <span class="nv">$@</span>&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'><span class="nf">&lt;p&gt;clean</span><span class="o">:</span>
-</span><span class='line'>    rm -rf <span class="k">$(</span>TARGET<span class="k">)</span>
-</span></code></pre></td></tr></table></div></figure></p>
-
-<p>kerker，一樣GG。</p>
-
-<pre><code class="text">$ make
-as hello.s -o hello.o
-ld hello.o -o hello
-$ ./hello 
-Illegal instruction
-</code></pre>
-
-<p>估狗到的組合語言的<a href="http://peterdn.com/post/e28098Hello-World!e28099-in-ARM-assembly.aspx">Hello world範例</a>最後會呼叫<code>exit</code> system call，照著呼叫<code>exit</code>就可以正常結束，這就是第三版。至於為何會出現<code>Illegal instruction</code>，根據<a href="http://scottt.tw/">Scott Tsai大大</a>的提示，當你的程式碼跑完後，接下來記憶體有啥CPU就跑啥，跑到不認識的opcode當然就GG了。</p>
-
-<p><a name="hello-asm-ex3"></a></p>
-
-<h2>範例：版本三</h2>
-
-<pre><code class="asm hello.s">.text
-.global _start
-_start:
-    mov     %r0, $0
-    mov     %r7, $1
-    svc     $0
-.end
-</code></pre>
-
-<p>單純叫了<code>exit</code>而已，有幾點注意的
-根據<a href="https://wiki.debian.org/ArmEabiPort#System_call_interface">Debian ARM system call interface</a>，可以知道</p>
-
-<ul>
-<li>r0 ~ r6是函數的帶入參數</li>
-<li>r7 是system call number，而system call number是啥呢？就是你要的system call 對應的數字。</li>
-</ul>
-
-
-<p>所以要呼叫<code>exit(0)</code> system 表示</p>
-
-<ul>
-<li>傳一個參數，數值為<code>0</code></li>
-<li>要設定<code>exit</code>對應的system call number為<code>1</code>。</li>
-</ul>
-
-
-<p>為何system call number是<code>1</code>呢？可以看看<a href="https://git.kernel.org/cgit/linux/kernel/git/rpi/linux-rpi.git/tree/arch/arm/include/asm/unistd.h">unistd.h</a>裏面system call number的定義，exit的system call number為<code>1</code>。</p>
-
-<p>設定完傳給<code>exit</code>參數後呼叫了一個組合語言指令<a href="http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0489g/Cihidabi.htmll"><code>svc</code></a>，這個指令主要是切換到Supervisor模式。Linux下面也許太過複雜，不太容易從user mode一路追到kernel然後又看懂這些system call的行為。沒關係成大資工作業有比較看得懂的範例可以參考。例如<a href="https://github.com/embedded2014/rtenv/blob/master/syscall.s#L6">包裝呼叫system call的函數</a>以及<a href="https://github.com/embedded2014/rtenv/blob/master/kernel.c#L1135">Kernel中對應的system call服務實作</a>。</p>
-
-<p>根據<a href="https://git.kernel.org/cgit/linux/kernel/git/rpi/linux-rpi.git/tree/arch/arm/include/asm/unistd.h">unistd.h</a>定義的system call number，<code>write</code>的system call number 是<code>4</code>，所以我們可以開始寫最後的版本了。</p>
-
-<p><a name="hello-asm-ex4"></a></p>
-
-<h2>範例：版本四</h2>
-
-<p>開始之前，先來看男人怎麼介紹write system call的</p>
-
-<pre><code class="c    ">ssize_t write(int fd, const void *buf, size_t count);
-</code></pre>
-
-<p>這代表</p>
-
-<ul>
-<li>有三個參數要傳給system call</li>
-<li>有回傳值可以吃</li>
-<li>其中一個參數是位址，這個位址我們會放<code>"Hello World\n"</code>字串</li>
-</ul>
-
-
-<p>那麼我先來看看怎麼放字串到記憶體</p>
-
-<pre><code>.data
-hello_str:
-    .ascii "Hello World\n"
-</code></pre>
-
-<p><code>.data</code>如果有看我以前的文章，就知道這是放有初始值全域變數的地方。</p>
-
-<p>而<code>hello_str</code>呢?嗯，對<code>_start:</code>有印象嗎？</p>
-
-<p>這叫作label，是GNU組語中symbol的一種，有興趣可以看<a href="https://sourceware.org/binutils/docs/as/Labels.html#Labels">這邊</a>。根據手冊，label還有一個功能，代表目前跑到的位址。所以<code>_start:</code>就是<code>.text</code> section的起始位址。而<code>hello_str</code>就是<code>.data</code> section的起始位址。從這兩個label可以看到label只是一個位址，可以指向函數或是資料，這和C語言的指標有異曲同工之妙。有興趣的朋友可以去找function pointer和C語言的callback函數。</p>
-
-<p>而<a href="https://sourceware.org/binutils/docs/as/Ascii.html#Ascii"><code>.ascii</code></a>，單純就是宣告字串指令。</p>
-
-<p>呼叫<code>write</code> system call來還有兩個問題要處理</p>
-
-<ul>
-<li>如何取得<code>hello_str</code>對應的位址放到暫存器<code>r1</code>上面？</li>
-<li>要怎麼算出<code>hello_str</code>字串的長度?</li>
-</ul>
-
-
-<p>關於第一個問題，<a href="https://sourceware.org/binutils/docs/as/ARM-Opcodes.html#ARM-Opcodes">GNU ARM組合語言有中將數值或位址放到暫存器的虛擬指令</a></p>
-
-<pre><code class="asm">ldr &lt;register&gt; , = &lt;expression&gt;
-</code></pre>
-
-<p><a href="https://sourceware.org/binutils/docs/as/Expressions.html#Expressions">expression</a>是一種表示<strong>位置</strong>或是<strong>數值</strong>的方式。</p>
-
-<p>恰巧<a href="https://sourceware.org/binutils/docs/as/Arguments.html#Arguments">symbol也算是一個expression</a>，所以可以表示成：</p>
-
-<pre><code class="asm">ldr %r1, =hello_str
-</code></pre>
-
-<p>第二個問題呢？要介紹<a href="https://sourceware.org/binutils/docs/as/Dot.html#Dot"><code>.</code></a>了。之前看過linker script的朋友應該對於locale counter還有印象。locale counter代表目前的位置。加上<a href="https://sourceware.org/binutils/docs/as/Prefix-Ops.html#Prefix-Ops"><code>expression</code>也支援運算</a>。利用<code>hello_str</code>是<code>.data</code>
-開頭，我們可以這樣做:</p>
-
-<pre><code>.data
-hello_str:
-    ascii "Hello World\n"
-hello_len = . - hello_str
-</code></pre>
-
-<p>綜合上面的討論，版本四組合語言會是
-<figure class='code'><figcaption><span>hello.s</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="na">.data</span>
-</span><span class='line'><span class="nl">hello_str:</span>
-</span><span class='line'>    <span class="na">.ascii</span> <span class="err">&amp;</span><span class="no">ldquo</span><span class="err">;</span><span class="no">Hello</span> <span class="no">World</span><span class="err">\</span><span class="no">n</span><span class="err">&amp;</span><span class="no">rdquo</span><span class="err">;</span>
-</span><span class='line'><span class="nf">hello_len</span> <span class="err">=</span> <span class="p">.</span> <span class="p">-</span> <span class="no">hello_str</span><span class="err">&lt;/</span><span class="no">p</span><span class="err">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;</span><span class="nf">p</span><span class="err">&gt;</span><span class="no">.text</span>
-</span><span class='line'><span class="na">.global</span> <span class="err">&lt;</span><span class="no">em</span><span class="err">&gt;</span><span class="no">start</span>
-</span><span class='line'><span class="err">&lt;/</span><span class="nf">em</span><span class="err">&gt;</span><span class="no">start</span><span class="p">:</span>
-</span><span class='line'>    <span class="err">/&lt;</span><span class="nf">em</span><span class="err">&gt;</span> <span class="nv">%r0</span> <span class="err">=</span> <span class="no">write</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="no">hello_str</span><span class="p">,</span> <span class="no">hello_len</span><span class="p">)</span><span class="err">;</span> <span class="err">&lt;/</span><span class="no">em</span><span class="err">&gt;/</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r0</span><span class="p">,</span> <span class="no">$1</span>
-</span><span class='line'>    <span class="nf">ldr</span>     <span class="nv">%r1</span><span class="p">,</span> <span class="err">=</span><span class="no">hello_str</span>
-</span><span class='line'>    <span class="nf">ldr</span>     <span class="nv">%r2</span><span class="p">,</span> <span class="err">=</span><span class="no">hello_len</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r7</span><span class="p">,</span> <span class="no">$4</span>
-</span><span class='line'>    <span class="nf">svc</span>     <span class="no">$0</span><span class="err">&lt;/</span><span class="no">p</span><span class="err">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;</span><span class="nf">pre</span><span class="err">&gt;&lt;</span><span class="no">code</span><span class="err">&gt;/</span><span class="p">*</span> <span class="no">exit</span><span class="p">(</span><span class="nv">%r0</span><span class="p">)</span> <span class="p">*</span><span class="err">/</span>
-</span><span class='line'><span class="nf">mov</span>     <span class="nv">%r7</span><span class="p">,</span> <span class="no">$1</span>
-</span><span class='line'><span class="nf">svc</span>     <span class="no">$0</span>
-</span><span class='line'><span class="err">&lt;/</span><span class="nf">code</span><span class="err">&gt;&lt;/</span><span class="no">pre</span><span class="err">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="err">&lt;</span><span class="nf">p</span><span class="err">&gt;</span><span class="no">.end</span>
-</span></code></pre></td></tr></table></div></figure></p>
-
-<p>等等，不是說有回傳值？還是要看<a href="http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ihi0042e/index.html">Procedure Call Standard for the ARM Architecture
-ABI r2.09手冊</a>，上面提到回傳資料會放到<code>r0</code>，剛好接下來的<code>exit</code> system call帶的第一個參數也要存放在r0，那麼我們可以直接觀察執行後回傳值如下：</p>
-
-<pre><code class="text">$ make
-as hello.s -o hello.o
-ld hello.o -o hello
-
-$ ./hello 
-Hello World
-$ echo $?
-12
-</code></pre>
-
-<h3>補充</h3>
-
-<pre><code>ldr &lt;register&gt; , = &lt;expression&gt;
-</code></pre>
-
-<p>這是個有趣的指令，這個指令事實上是個虛擬指令。怎麼說呢，因為這個指令的目標是<strong>把數值塞到指定的暫存器</strong>。這個數值是位址還是啥死人骨頭並不重要。重要的是，由於opcode的限制，把數值塞到指定的暫存器會有限制滴。例如<code>ARM Cortex M0</code>的<code>MOV</code>的數值只有8-bit，要塞32-bit的數值就需要配合其他的指令做連續技。因此
-<code>
-ldr &lt;register&gt; , = &lt;expression&gt;
-</code>
-這樣的指令就可以讓你寫起來比較輕鬆。</p>
-
-<p>另外一個值得一提是，如果組譯器無法把<code>ldr &lt;register&gt; , = &lt;expression&gt;</code>虛擬指令轉換成<code>MOV</code>或<code>MVN</code>指令，把你的數值塞到暫存器的話。組譯器會把你的值放在一塊記憶體中，使用<strong>真的</strong>ldr把這塊記憶體的值載入到暫存器中。這個方法稱為literal pool，細節可以看<a href="http://infocenter.arm.com/help/index.jsp?topic=%2Fcom.arm.doc.dui0473c%2FBgbccbdi.html">這邊</a>。</p>
-
-<p><a name="hello-asm-conl"></a></p>
-
-<h2>總結</h2>
-
-<p>本文從會GG的組合語言一路改到可以印出Hello World，並且在程式結束後回傳字串長度。在文章中簡單提到了GNU as的</p>
-
-<ul>
-<li>組合語言中section</li>
-<li>組合語言的編譯方式</li>
-<li>組合語言中的symbol和字串表示方式</li>
-<li>組合語言中的expression</li>
-<li>ABI實例</li>
-</ul>
-
-
-<p>希望對有需要的朋友有所幫助。</p>
-
-<p><a name="hello-asm-ext"></a></p>
-
-<h2>延伸閱讀及致謝</h2>
-
-<p>感謝<a href="http://scottt.tw/">Scott Tsai大大</a>提供的資料以及指出文章中錯誤的地方。另外他也有提到其他有趣的部份，當作以後的作業。先列出如下</p>
-
-<ul>
-<li><a href="http://stackoverflow.com/questions/28831763/hello-world-program-in-nasm-x86-64-prints-hello-world-continuously/28837680#28837680">從組合語言直接呼叫header file內的system call</a></li>
-<li><a href="http://www.arm.linux.org.uk/developer/memory.txt">Kernel Memory Layout on ARM Linux</a>
-
-<ul>
-<li>這邊主要討論的是<code>objdump -d</code>發現obj檔和執行檔差別只在進入點位址的差別，而進入點位址如何決定呢？這邊有規範，另外也可以看default linker script看看如何設定的。</li>
-</ul>
-</li>
-<li><a href="https://gist.github.com/scottt/a57220efc15d15569a2e">Scott大大的範例程式</a>
-
-<ul>
-<li>可以看到，這個版本和我參考寫出來的版本差異有
-
-<ul>
-<li>把<code>"Hello world"</code>放在<code>.rodata</code> section中，這比<code>.data</code>更實際，因為這個字串的確沒有必要設成全域變數。</li>
-<li>使用了preprocess方式。</li>
-<li>提供了反組譯的結果</li>
-<li>提供X86-64版本的組合語言比較</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-
-
-<p>感謝<a href="http://vh21.github.io">Viler Hsiao大大</a>寫文回答我的問題。</p>
-
-<ul>
-<li><a href="http://vh21.github.io/assembly/2015/04/20/read-assembly-code.html">Viler Hsiao: 閱讀assembly code</a></li>
-</ul>
-
-
-<p><a name="hello-asm-ref"></a></p>
-
-<h2>參考資料</h2>
-
-<ul>
-<li><a href="http://peterdn.com/post/e28098Hello-World!e28099-in-ARM-assembly.aspx">『Hello World!』 in ARM assembly</a>
-
-<ul>
-<li>本篇程式碼大量參考這篇。</li>
-</ul>
-</li>
-<li><a href="https://sourceware.org/binutils/docs/as/index.html">GNU Manual: Using as</a></li>
-</ul>
-
 ]]></content>
   </entry>
   
