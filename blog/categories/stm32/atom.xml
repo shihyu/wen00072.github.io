@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Stm32 | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/stm32/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-06T01:50:35+08:00</updated>
+  <updated>2016-08-06T08:41:39+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -38,6 +38,7 @@
 
 <ul>
 <li><a href="#stm-3-prepare">事前準備</a></li>
+<li><a href="#stm-3-env">測試環境</a></li>
 <li><a href="#stm-3-usart">USART 控制</a></li>
 <li><a href="#stm-3-code">程式碼</a>
 
@@ -68,11 +69,33 @@
 </ul>
 
 
+<p><a name="stm-3-env"></a></p>
+
+<h2>測試環境</h2>
+
+<pre><code class="text">$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.4 LTS
+Release:    14.04
+Codename:   trusty
+
+$ arm-none-eabi-gcc --version
+arm-none-eabi-gcc (GNU Tools for ARM Embedded Processors) 5.4.1 20160609 (release) [ARM/embedded-5-branch revision 237715]
+...
+</code></pre>
+
+<ul>
+<li>SPL版本： STM32F4xx_DSP_StdPeriph_Lib_V1.6.1</li>
+<li>開發板： STM32F4 Dicovery, <a href="http://www.st.com/content/st_com/en/products/evaluation-tools/product-evaluation-tools/mcu-eval-tools/stm32-mcu-eval-tools/stm32-mcu-discovery-kits/32f429idiscovery.html">STM32F429-Disco</a></li>
+</ul>
+
+
 <p><a name="stm-3-usart"></a></p>
 
 <h2>USART 控制</h2>
 
-<p>對於組裝工來說，我需要理解的不是電位差之這些電器信號。甚至在組裝時我也不在意暫存器設定等東西和背後的原理（好孩子不要學）。我關心的是</p>
+<p>對於組裝工來說，我想要理解的不是電位差之這些電器信號。甚至在組裝時我也不在意暫存器設定等東西和背後的原理（好孩子不要學）。我關心的是</p>
 
 <ol>
 <li>我們要用哪些資源？</li>
