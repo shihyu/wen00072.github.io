@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Stm32 | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/stm32/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-06T08:41:39+08:00</updated>
+  <updated>2016-08-10T12:41:58+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -667,30 +667,48 @@ LDSCRIPT?=$(PRJ_ROOT)/conf/bared.ld
 </code></pre>
 
 <ul>
-<li><p>指定開發平台
-<code>Makefile
-PLATFORM = STM32F429_439xx
-</code></p></li>
-<li><p>設定header file路徑
-<code>Makefile
-SPL_INC=$(STM_DIR)/inc
+<li>指定開發平台</li>
+</ul>
+
+
+<pre><code class="Makefile">PLATFORM = STM32F429_439xx
+</code></pre>
+
+<ul>
+<li>設定header file路徑</li>
+</ul>
+
+
+<pre><code class="Makefile">SPL_INC=$(STM_DIR)/inc
 CMSIS_COMMON_INC = $(CMSIS_DIR)/Include
 CMSIS_STM32_INC  = $(CMSIS_DIR)/Device/ST/STM32F4xx/Include
-</code></p></li>
-<li><p>指令所有產生的檔案都放到build目錄
-<code>Makefile
-OUT_DIR=$(PRJ_ROOT)/build
-</code></p></li>
-<li><p>設定start up檔案和system檔案路徑
-除非你要自己從flash搬資料到RAM、設定ISR vector、RCC等，不然一定會用到start up 檔案和system檔案。start up 檔案在SPL中有很多範本，我們使用了<code>gcc_ride7</code>這個版本，原因是其他的都沒有<code>gcc</code>這個字眼。
+</code></pre>
+
+<ul>
+<li>指令所有產生的檔案都放到build目錄</li>
+</ul>
+
+
+<pre><code class="Makefile">OUT_DIR=$(PRJ_ROOT)/build
+</code></pre>
+
+<ul>
+<li>設定start up檔案和system檔案路徑</li>
+</ul>
+
+
+<p>除非你要自己從flash搬資料到RAM、設定ISR vector、RCC等，不然一定會用到start up 檔案和system檔案。start up 檔案在SPL中有很多範本，我們使用了<code>gcc_ride7</code>這個版本，原因是其他的都沒有<code>gcc</code>這個字眼。
 <code>Makefile
 CMSIS_STARTUP_SRC = $(CMSIS_DIR)/Device/ST/STM32F4xx/Source/Templates/gcc_ride7/startup_stm32f429_439xx.s
 CMSIS_SYSTEM_SRC  = $(CMSIS_DIR)/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
-</code></p></li>
-<li><p>設定debug mode
-SPL提供assertion，使用USE_FULL_ASSERT打開。打開以後需要自行實作函數<code>void assert_failed(uint8_t* file, uint32_t line)</code>。</p></li>
+</code></p>
+
+<ul>
+<li>設定debug mode</li>
 </ul>
 
+
+<p>SPL提供assertion，使用USE_FULL_ASSERT打開。打開以後需要自行實作函數<code>void assert_failed(uint8_t* file, uint32_t line)</code>。</p>
 
 <pre><code class="Makefile">BUILD_MODE = DEBUG
 
@@ -700,12 +718,17 @@ endif
 </code></pre>
 
 <ul>
-<li><p>CPU相關compile flags
-STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>arm-none-eabi-gcc -Q --help=target</code>查詢有支援哪些平台。
+<li>CPU相關compile flags</li>
+</ul>
+
+
+<p>STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>arm-none-eabi-gcc -Q --help=target</code>查詢有支援哪些平台。
 <code>Makefile
 ARCH_FLAGS = -mthumb -mcpu=cortex-m4
-</code></p></li>
-<li><p>Compile flag分為</p>
+</code></p>
+
+<ul>
+<li>Compile flag分為
 
 <ul>
 <li>增加嚴格的錯誤檢查</li>
@@ -742,48 +765,47 @@ include $(PRJ_ROOT)/conf/build.def
 </code></pre>
 
 <ul>
-<li><p>指定要編譯的SPL 檔案
-除了前面<a href="#STM_MK_COMM">前面</a>提到的start up檔案、system檔、還有你自己的程式碼外，根據你的需求，還會需要SPL的驅動程式。這個專案我們需要<code>GPIO</code>和<code>RCC</code> (reset clock control)這兩個部份。一個是用來控制LED、另外一個用來計算時間產生以控制閃滅。
+<li>指定要編譯的SPL 檔案</li>
+</ul>
+
+
+<p>除了前面<a href="#STM_MK_COMM">前面</a>提到的start up檔案、system檔、還有你自己的程式碼外，根據你的需求，還會需要SPL的驅動程式。這個專案我們需要<code>GPIO</code>和<code>RCC</code> (reset clock control)這兩個部份。一個是用來控制LED、另外一個用來計算時間產生以控制閃滅。
 <code>Makefile
 SRCS  = $(CMSIS_STARTUP_SRC) $(CMSIS_SYSTEM_SRC)
 SRCS += $(STM_DIR)/src/stm32f4xx_gpio.c
 SRCS += $(STM_DIR)/src/stm32f4xx_rcc.c
 SRCS += led.c
-</code></p></li>
-<li><p>檔名轉換
-上面的是source檔案，但是我們編譯需要把source檔案轉成object檔案並且存在./build目錄下。
+</code></p>
+
+<ul>
+<li>檔名轉換</li>
+</ul>
+
+
+<p>上面的是source檔案，但是我們編譯需要把source檔案轉成object檔案並且存在./build目錄下。
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
 </pre></td><td class='code'><pre><code class='Makefile'><span class='line'><span class="nv">C_OBJS</span> <span class="o">=</span> <span class="k">$(</span>patsubst %.c, %.o, <span class="k">$(</span>SRCS<span class="k">))</span>   <span class="c"># translate &lt;em&gt;.c to &lt;/em&gt;.o</span>
-</span><span class='line'><span class="nv">OBJS</span>   <span class="o">=</span> <span class="k">$(</span>patsubst %.s, %.o, <span class="k">$(</span>C_OBJS<span class="k">))</span> <span class="c"># also &lt;em&gt;.s to &lt;/em&gt;.o files&lt;/p&gt;&lt;/li&gt;</span>
-</span><span class='line'><span class="err">&lt;/ul&gt;</span>
-</span><span class='line'>
+</span><span class='line'><span class="nv">OBJS</span>   <span class="o">=</span> <span class="k">$(</span>patsubst %.s, %.o, <span class="k">$(</span>C_OBJS<span class="k">))</span> <span class="c"># also &lt;em&gt;.s to &lt;/em&gt;.o files&lt;/p&gt;</span>
 </span><span class='line'>
 </span><span class='line'><span class="err">&lt;p&gt;</span><span class="nv">OUT_OBJS</span> <span class="o">=</span> <span class="k">$(</span>addprefix <span class="k">$(</span>OUT_DIR<span class="k">)</span>/, <span class="k">$(</span>OBJS<span class="k">))</span>
 </span></code></pre></td></tr></table></div></figure></p>
 
 <ul>
-<li><p>產生led.bin
-不要被符號嚇到，說明如下</p>
-
-<ul>
-<li>產生build/led.bin檔，前提是上面的object 檔案都編譯完成</li>
-<li>產生方式
-
-<ul>
-<li>叫gcc 從前面的object檔案中，透過led.ld linker script產生出build/led.elf、build/led.map (debug用)</li>
-<li>從build/led.elf產生build/led.bin</li>
-<li>從build/led.elf產生build/led.list (debug用)</li>
-</ul>
-</li>
-</ul>
-</li>
+<li>產生led.bin</li>
 </ul>
 
+
+<p>不要被符號嚇到，說明如下</p>
+
+<pre><code>* 產生build/led.bin檔，前提是上面的object 檔案都編譯完成
+* 產生方式
+    * 叫gcc 從前面的object檔案中，透過led.ld linker script產生出build/led.elf、build/led.map (debug用)
+    * 從build/led.elf產生build/led.bin
+    * 從build/led.elf產生build/led.list (debug用)
+</code></pre>
 
 <pre><code class="Makefile">$(OUT_DIR)/$(TARGET).bin: $(OUT_OBJS)
     $(TOOL_CHAIN_PREFIX)-gcc -Wl,-Map=$(OUT_DIR)/$(TARGET).map,-T$(TARGET).ld -nostartfiles \
@@ -793,26 +815,37 @@ SRCS += led.c
 </code></pre>
 
 <ul>
-<li>編譯並產生object 檔案
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='Makefile'><span class='line'><span class="nf">$(OUT_DIR)/%.o</span><span class="o">:</span> %.<span class="n">s</span>
-</span><span class='line'>  @mkdir -p <span class="k">$(</span>dir <span class="nv">$@</span><span class="k">)</span>
-</span><span class='line'>  <span class="k">$(</span>TOOL_CHAIN_PREFIX<span class="k">)</span>-gcc -c <span class="k">$(</span>CFLAGS<span class="k">)</span> <span class="nv">$&amp;</span>lt<span class="p">;</span> -o <span class="nv">$@</span>&lt;/li&gt;
-</span><span class='line'><span class="err">&lt;/ul&gt;</span>
-</span><span class='line'>
-</span><span class='line'>
-</span><span class='line'><span class="nf">&lt;p&gt;$(OUT_DIR)/%.o</span><span class="o">:</span> %.<span class="n">c</span>
-</span><span class='line'>    @mkdir -p <span class="k">$(</span>dir <span class="nv">$@</span><span class="k">)</span>
-</span><span class='line'>    <span class="k">$(</span>TOOL_CHAIN_PREFIX<span class="k">)</span>-gcc -c <span class="k">$(</span>CFLAGS<span class="k">)</span> <span class="nv">$&amp;</span>lt<span class="p">;</span> -o <span class="nv">$@</span>
-</span></code></pre></td></tr></table></div></figure></p>
+<li>編譯並產生object 檔案</li>
+</ul>
+
+
+<pre><code class="Makefile">$(OUT_DIR)/%.o: %.s
+    @mkdir -p $(dir $@)
+    $(TOOL_CHAIN_PREFIX)-gcc -c $(CFLAGS) $&lt; -o $@
+
+$(OUT_DIR)/%.o: %.c
+    @mkdir -p $(dir $@)
+    $(TOOL_CHAIN_PREFIX)-gcc -c $(CFLAGS) $&lt; -o $@
+</code></pre>
+
+<ul>
+<li>燒錄</li>
+</ul>
+
+
+<p>可以下<code>make flash</code>燒錄。使用<code>openocd</code>的原因是因為<code>st-flash</code>偶爾會有寫燒錄完成但是實際上沒有燒進去的情況</p>
+
+<pre><code class="Makefile">flash: $(OUT_DIR)/$(TARGET).bin
+    openocd -f interface/stlink-v2.cfg  \
+            -f target/stm32f4x.cfg      \
+            -c "init"                   \
+            -c "reset init"             \
+            -c "stm32f2x unlock 0"      \
+            -c "flash probe 0"          \
+            -c "flash info 0"           \
+            -c "flash write_image erase $&lt; 0x8000000" \
+            -c "reset run" -c shutdown
+</code></pre>
 
 <ul>
 <li>以下不解釋
@@ -899,12 +932,12 @@ clean:
 </code></pre>
 
 <ul>
-<li>輸出資料到GPIO範例如下
-<code>c 輸出資料到GPIO範例
-  GPIO_WriteBit(GPIOG, GPIO_Pin_13 , 1);
-</code></li>
+<li>輸出資料到GPIO範例如下</li>
 </ul>
 
+
+<pre><code class="c 輸出資料到GPIO範例">    GPIO_WriteBit(GPIOG, GPIO_Pin_13 , 1);
+</code></pre>
 
 <p><a name="STM_LED_TIMER_ISR"></a></p>
 
@@ -913,33 +946,30 @@ clean:
 <p>要做的是</p>
 
 <ul>
-<li><p>設定timer interrupt 出現的週期，設定成nano second的程式碼如下
-<code>c
-  /* Setup timer interrupt interval to nano second */
-  if(SysTick_Config(SystemCoreClock / 1000)) {
-      while(1); /* Trap here if failed */
-  }   
-</code></p></li>
-<li><p>time out的ISR，基本上就是計數counter加上busy waiting而已
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="k">static</span> <span class="n">__IO</span> <span class="kt">uint32_t</span> <span class="n">g_timeToWakeUp</span><span class="p">;</span>
-</span><span class='line'><span class="kt">void</span> <span class="nf">sleep</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">nSec</span><span class="p">)</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>  <span class="n">g_timeToWakeUp</span> <span class="o">=</span> <span class="n">nSec</span><span class="p">;</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span>  <span class="o">/&lt;</span><span class="n">em</span><span class="o">&gt;</span> <span class="n">Busy</span> <span class="n">waiting</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;/</span>
-</span><span class='line'>  <span class="k">while</span><span class="p">(</span><span class="n">g_timeToWakeUp</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure></p></li>
+<li>設定timer interrupt 出現的週期，設定成nano second的程式碼如下</li>
 </ul>
 
+
+<pre><code class="c">    /* Setup timer interrupt interval to nano second */
+    if(SysTick_Config(SystemCoreClock / 1000)) {
+        while(1); /* Trap here if failed */
+    }   
+</code></pre>
+
+<ul>
+<li>time out的ISR，基本上就是計數counter加上busy waiting而已</li>
+</ul>
+
+
+<pre><code class="c">static __IO uint32_t g_timeToWakeUp;
+void sleep(uint32_t nSec)
+{
+    g_timeToWakeUp = nSec;
+
+    /* Busy waiting */
+    while(g_timeToWakeUp != 0);
+}
+</code></pre>
 
 <p><a name="STM_LED_CODE"></a></p>
 
@@ -1033,17 +1063,23 @@ void assert_failed(uint8_t* file, uint32_t line)
 <h3>燒錄和測試</h3>
 
 <ul>
-<li><p>直接在工作目錄下執行make
-<code>text
-STM32F429-Discovery-Disco-Pratice/labs/0_led$ make
+<li>直接在工作目錄下執行make</li>
+</ul>
+
+
+<pre><code class="text">STM32F429-Discovery-Disco-Pratice/labs/0_led$ make
 arm-none-eabi-gcc -c -DUSE_FULL_ASSERT -g3 -mthumb -mcpu=cortex-m4 -I. -I../../libraries/STM32F4xx_DSP_StdPeriph_Lib_V1.6.1/Libraries/STM32F4xx_StdPeriph_Driver/inc -I../../libraries/
 ...
 arm-none-eabi-objcopy -Obinary ../../build/led.elf ../../build/led.bin
 arm-none-eabi-objdump -S ../../build/led.elf &gt; ../../build/led.list
-</code></p></li>
-<li><p>燒錄指令如下
-<code>text
-STM32F429-Discovery-Disco-Pratice/labs/0_led$ st-flash write ../../build/led.bin  0x8000000
+</code></pre>
+
+<ul>
+<li>燒錄指令如下</li>
+</ul>
+
+
+<pre><code class="text">STM32F429-Discovery-Disco-Pratice/labs/0_led$ st-flash write ../../build/led.bin  0x8000000 
 2016-07-25T11:31:28 INFO src/stlink-common.c: Loading device parameters....
 2016-07-25T11:31:28 INFO src/stlink-common.c: Device connected is: F42x and F43x device, id 0x10036419
 ...
@@ -1051,9 +1087,7 @@ enabling 32-bit flash writes
 size: 11596
 2016-07-25T11:31:28 INFO src/stlink-common.c: Starting verification of write complete
 2016-07-25T11:31:29 INFO src/stlink-common.c: Flash written and verified! jolly good!
-</code></p></li>
-</ul>
-
+</code></pre>
 
 <p>以下是LED點亮結果</p>
 

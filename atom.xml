@@ -4,7 +4,7 @@
   <title><![CDATA[My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-06T08:41:39+08:00</updated>
+  <updated>2016-08-10T12:41:58+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -1081,10 +1081,11 @@
 
 
 <ul>
-<li>設定start up檔案和system檔案路徑
-除非你要自己從flash搬資料到RAM、設定ISR vector、RCC等，不然一定會用到start up 檔案和system檔案。start up 檔案在SPL中有很多範本，我們使用了<code>gcc_ride7</code>這個版本，原因是其他的都沒有<code>gcc</code>這個字眼。</li>
+<li>設定start up檔案和system檔案路徑</li>
 </ul>
 
+
+<p>除非你要自己從flash搬資料到RAM、設定ISR vector、RCC等，不然一定會用到start up 檔案和system檔案。start up 檔案在SPL中有很多範本，我們使用了<code>gcc_ride7</code>這個版本，原因是其他的都沒有<code>gcc</code>這個字眼。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -1094,10 +1095,11 @@
 
 
 <ul>
-<li>設定debug mode
-SPL提供assertion，使用USE_FULL_ASSERT打開。打開以後需要自行實作函數<code>void assert_failed(uint8_t* file, uint32_t line)</code>。</li>
+<li>設定debug mode</li>
 </ul>
 
+
+<p>SPL提供assertion，使用USE_FULL_ASSERT打開。打開以後需要自行實作函數<code>void assert_failed(uint8_t* file, uint32_t line)</code>。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -1113,10 +1115,11 @@ SPL提供assertion，使用USE_FULL_ASSERT打開。打開以後需要自行實�
 
 
 <ul>
-<li>CPU相關compile flags
-STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>arm-none-eabi-gcc -Q --help=target</code>查詢有支援哪些平台。</li>
+<li>CPU相關compile flags</li>
 </ul>
 
+
+<p>STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>arm-none-eabi-gcc -Q --help=target</code>查詢有支援哪些平台。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 </pre></td><td class='code'><pre><code class='Makefile'><span class='line'><span class="nv">ARCH_FLAGS</span> <span class="o">=</span> -mthumb -mcpu<span class="o">=</span>cortex-m4
@@ -1173,10 +1176,11 @@ STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>ar
 
 
 <ul>
-<li>指定要編譯的SPL 檔案
-除了前面<a href="#STM_MK_COMM">前面</a>提到的start up檔案、system檔、還有你自己的程式碼外，根據你的需求，還會需要SPL的驅動程式。這個專案我們需要<code>GPIO</code>和<code>RCC</code> (reset clock control)這兩個部份。一個是用來控制LED、另外一個用來計算時間產生以控制閃滅。</li>
+<li>指定要編譯的SPL 檔案</li>
 </ul>
 
+
+<p>除了前面<a href="#STM_MK_COMM">前面</a>提到的start up檔案、system檔、還有你自己的程式碼外，根據你的需求，還會需要SPL的驅動程式。這個專案我們需要<code>GPIO</code>和<code>RCC</code> (reset clock control)這兩個部份。一個是用來控制LED、另外一個用來計算時間產生以控制閃滅。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -1190,10 +1194,11 @@ STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>ar
 
 
 <ul>
-<li>檔名轉換
-上面的是source檔案，但是我們編譯需要把source檔案轉成object檔案並且存在./build目錄下。</li>
+<li>檔名轉換</li>
 </ul>
 
+
+<p>上面的是source檔案，但是我們編譯需要把source檔案轉成object檔案並且存在./build目錄下。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -1207,23 +1212,18 @@ STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>ar
 
 
 <ul>
-<li><p>產生led.bin
-不要被符號嚇到，說明如下</p>
-
-<ul>
-<li>產生build/led.bin檔，前提是上面的object 檔案都編譯完成</li>
-<li>產生方式
-
-<ul>
-<li>叫gcc 從前面的object檔案中，透過led.ld linker script產生出build/led.elf、build/led.map (debug用)</li>
-<li>從build/led.elf產生build/led.bin</li>
-<li>從build/led.elf產生build/led.list (debug用)</li>
-</ul>
-</li>
-</ul>
-</li>
+<li>產生led.bin</li>
 </ul>
 
+
+<p>不要被符號嚇到，說明如下</p>
+
+<pre><code>* 產生build/led.bin檔，前提是上面的object 檔案都編譯完成
+* 產生方式
+    * 叫gcc 從前面的object檔案中，透過led.ld linker script產生出build/led.elf、build/led.map (debug用)
+    * 從build/led.elf產生build/led.bin
+    * 從build/led.elf產生build/led.list (debug用)
+</code></pre>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -1257,6 +1257,36 @@ STM32F4使用Cotex M4。題外話，對於toolchain有興趣的可以用<code>ar
 </span><span class='line'><span class="nf">$(OUT_DIR)/%.o</span><span class="o">:</span> %.<span class="n">c</span>
 </span><span class='line'>  @mkdir -p <span class="k">$(</span>dir <span class="nv">$@</span><span class="k">)</span>
 </span><span class='line'>  <span class="k">$(</span>TOOL_CHAIN_PREFIX<span class="k">)</span>-gcc -c <span class="k">$(</span>CFLAGS<span class="k">)</span> <span class="nv">$&lt;</span> -o <span class="nv">$@</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>燒錄</li>
+</ul>
+
+
+<p>可以下<code>make flash</code>燒錄。使用<code>openocd</code>的原因是因為<code>st-flash</code>偶爾會有寫燒錄完成但是實際上沒有燒進去的情況</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='Makefile'><span class='line'><span class="nf">flash</span><span class="o">:</span> <span class="k">$(</span><span class="nv">OUT_DIR</span><span class="k">)</span>/<span class="k">$(</span><span class="nv">TARGET</span><span class="k">)</span>.<span class="n">bin</span>
+</span><span class='line'>  openocd -f interface/stlink-v2.cfg  <span class="se">\</span>
+</span><span class='line'>            -f target/stm32f4x.cfg      <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;init&quot;</span>                   <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;reset init&quot;</span>             <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;stm32f2x unlock 0&quot;</span>      <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;flash probe 0&quot;</span>          <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;flash info 0&quot;</span>           <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;flash write_image erase $&lt; 0x8000000&quot;</span> <span class="se">\</span>
+</span><span class='line'>            -c <span class="s2">&quot;reset run&quot;</span> -c shutdown
 </span></code></pre></td></tr></table></div></figure>
 
 
