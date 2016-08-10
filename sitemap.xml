@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>http://wen00072.github.io/blog/2016/08/10/arm-cm4-pratice-4-semihosting/</loc>
+    <lastmod>2016-08-10T12:51:46+08:00</lastmod>
+  </url>
+  <url>
     <loc>http://wen00072.github.io/blog/2016/08/05/arm-cm4-pratice-3-lab-usart/</loc>
     <lastmod>2016-08-05T15:53:47+08:00</lastmod>
   </url>
@@ -787,5 +791,8 @@
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/shell-script/</loc>
+  </url>
+  <url>
+    <loc>http://wen00072.github.io/blog/categories/semihosting/</loc>
   </url>
 </urlset>
