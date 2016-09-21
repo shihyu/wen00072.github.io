@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Semihosting | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/semihosting/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-08-10T17:17:33+08:00</updated>
+  <updated>2016-09-21T17:33:40+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -340,6 +340,12 @@ My test
 <ul>
 <li><a href="http://infocenter.arm.com/help/topic/com.arm.doc.dui0471g/CHDJHHDI.html">ARM Compiler toolchain Developing Software for ARM Processors: Semihosting</a></li>
 <li><a href="http://openocd.org/doc/html/Architecture-and-Core-Commands.html">OpenOCD User&rsquo;s Guide: Architecture and Core Commands</a></li>
+<li><a href="http://bgamari.github.io/posts/2014-10-31-semihosting.html">Semihosting on ARM with GCC and OpenOCD</a>
+
+<ul>
+<li>這個很有趣，可以用Semihosting直接使用glibc的stdio，不過做實驗就是要吃原味，要又痛又爽才是最高境界，所以這個我就沒去嘗試了</li>
+</ul>
+</li>
 </ul>
 
 ]]></content>
