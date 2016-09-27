@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Arm | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/arm/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-09-21T17:35:25+08:00</updated>
+  <updated>2016-09-27T14:45:19+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -12,6 +12,211 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Linux Kernel Pratice 0: Buildroot (1)]]></title>
+    <link href="http://wen00072.github.io/blog/2016/09/27/linux-kernel-pratice-0-buildroot-setup-with-qemu/"/>
+    <updated>2016-09-27T09:43:20+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/09/27/linux-kernel-pratice-0-buildroot-setup-with-qemu</id>
+    <content type="html"><![CDATA[<p>理論上不應該要邊移動邊開火，延長戰線。不過計劃趕不上變化，既來之則安之。</p>
+
+<p>最近因為特別因素開始學習Linux kernel，看能不能Linux kernel和STM32兩邊都不要漏掉。不管怎樣，學習和實習絕對分不開，所以還是從環境架設開始吧。這次的實習環境架設的目標是：</p>
+
+<ol>
+<li>可以使用ARM 平台。一方面追求流行，一方面我不想再開x86這個副本</li>
+<li>可以方便地建立ARM平台的Linux Rootfs和kernel版本</li>
+<li>可以方便地更改指定要編譯的Kernel版本</li>
+<li>透過Qemu ，使用2的Rootfs和kernel開機</li>
+<li>透過Qemu和搭配的工具可以分析Linux kernel的run time 行為</li>
+</ol>
+
+
+<p>今天只有辦到1和2而已，剩下的還要繼續努力。</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#lk0_env">測試環境</a></li>
+<li><a href="#lk0_ins">安裝Buildroot</a>
+
+<ul>
+<li><a href="#lk0_ins_dl">下載Buildroot</a></li>
+<li><a href="#lk0_ins_set">設定ARM 環境</a></li>
+<li><a href="#lk0_ins_build">編譯及輸出</a></li>
+</ul>
+</li>
+<li><a href="#lk0_test">測試</a></li>
+<li><a href="#lk0_ref">參考資料</a>
+
+<ul>
+<li><a href="#lk0_ref_data">下次準備看的資料</a></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="lk0_env"></a></p>
+
+<h2>測試環境</h2>
+
+<p>因為我已經裝過開發相關的套件，因此如果您是新手可能要自行摸索也許有需要另外安裝的套件如<code>git</code>。嘛，練習解讀錯誤訊息也是一種學習。</p>
+
+<pre>
+$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.5 LTS
+Release:    14.04
+Codename:   trusty
+</pre>
+
+
+<p><a name="lk0_ins"></a></p>
+
+<h2>安裝Buildroot</h2>
+
+<p>主要分成下面三個步驟</p>
+
+<ul>
+<li><a href="#lk0_ins_dl">下載Buildroot</a></li>
+<li><a href="#lk0_ins_set">設定ARM 環境</a></li>
+<li><a href="#lk0_ins_build">編譯及輸出</a></li>
+</ul>
+
+
+<p><a name="lk0_ins_dl"></a></p>
+
+<h3>下載Buildroot</h3>
+
+<p>直接看例子，剪下貼上就好</p>
+
+<pre><code class="sh">mkdir buildroot
+cd buildroot
+git clone git://git.buildroot.net/buildroot
+</code></pre>
+
+<p><a name="lk0_ins_set"></a></p>
+
+<h3>設定ARM 環境</h3>
+
+<p>網路上查到大部分都是從<code>make menuconfig</code>開始。不過我是很<strong>明確地</strong>要用<code>Qemu</code>跑ARM的系統。所以就找了一下發現有下面的指令</p>
+
+<pre><code class="text">make qemu_x86_defconfig
+</code></pre>
+
+<p>想說既然有<code>x86_defconfig</code>，那應該有<code>arm_defconfig</code>吧? 錯！那我就去<code>buildroot/board/qemu</code>目錄下找，有看到<code>arm-versatile</code>。印象中<a href="blog/2015/02/07/by-qemu-arm-installation-of-debian-systems/">以前</a>有用過Qemu跑的Debian系統也是<code>versatile</code>。所以就很高興地下了</p>
+
+<pre><code class="text">make qemu_arm-versatile_defconfig
+</code></pre>
+
+<p>結果一樣GG，估狗查才知道正確的用法是：</p>
+
+<pre><code>make qemu_arm_versatile_defconfig
+</code></pre>
+
+<p>接下來就用<code>make menuconfig</code>做細項調整，我主要是改成</p>
+
+<ol>
+<li>使用glibc</li>
+<li>使用gcc 4.8
+
+<ul>
+<li>預設5.x，因為我想要編Linux kernel 4.4.2。以前PC經驗使用gcc 5.x極端痛苦，後來還是換回gcc 4.8</li>
+</ul>
+</li>
+<li>一些除錯設定</li>
+</ol>
+
+
+<p>另外本來想要嘗試設定更動Kernel版本，但是發現需要更進一步的了解buildroot才能夠達成。當作下次目標吧。</p>
+
+<p><a name="lk0_ins_build"></a></p>
+
+<h3>編譯及輸出</h3>
+
+<p>編譯只要下<code>make</code>就會幫你下載和編譯開機需要的</p>
+
+<ol>
+<li>套件和一些常用工具，並封裝到<code>output/image/roofs.ext2</code></li>
+<li>Kernel(預設4.7)，編譯成<code>zImage</code>，放在<code>output/image/zImage</code></li>
+</ol>
+
+
+<p><a name="lk0_test"></a></p>
+
+<h2>測試</h2>
+
+<p>接下來也不難，可以參考<code>board/qemu/arm-versatile/readme.txt</code>
+簡單來說就是執行下面指令，開機完使用<code>root</code>登入不用密碼，使用<code>poweroff</code>後再手動離開qemu。</p>
+
+<pre><code class="sh">qemu-system-arm -M versatilepb -kernel output/images/zImage -dtb output/images/versatile-pb.dtb -drive file=output/images/rootfs.ext2,if=scsi,format=raw -append "root=/dev/sda console=ttyAMA0,115200" -serial stdio -net nic,model=rtl8139 -net user
+</code></pre>
+
+<p>執行畫面如下</p>
+
+<pre><code class="text">$ qemu-system-arm -M versatilepb -kernel output/images/zImage -dtb output/images/versatile-pb.dtb -drive file=output/images/rootfs.ext2,if=scsi,format=raw -append "root=/dev/sda console=ttyAMA0,115200" -serial stdio -net nic,model=rtl8139 -net user
+...
+Booting Linux on physical CPU 0x0
+Linux version 4.7.0 (user@host) (gcc version 4.8.5 (Buildroot 2016.11-git-00439-g14b2472) ) #1 Mon Sep 26 22:36:42 CST 2016
+CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+CPU: VIVT data cache, VIVT instruction cache
+Machine model: ARM Versatile PB
+....
+EXT4-fs (sda): re-mounted. Opts: block_validity,barrier,user_xattr,errors=remount-ro
+Starting logging: OK
+Initializing random number generator... random: dd urandom read with 46 bits of entropy available
+done.
+Starting network: 8139cp 0000:00:0c.0 eth0: link up, 100Mbps, full-duplex, lpa 0x05E1
+...
+adding dns 10.0.2.3
+OK
+
+Welcome to Buildroot
+buildroot login: root
+#
+</code></pre>
+
+<p><a name="lk0_ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="https://buildroot.org/downloads/manual/manual.html">The Buildroot user manual</a>
+
+<ul>
+<li>只有看部份，不過官方文件本來就是應該放在第一位</li>
+</ul>
+</li>
+<li><a href="http://pressreset.net/2013/09/buildroot-and-qemu-the-quickest-receipe-for-your-own-linux/">Buildroot and QEMU – the quickest receipe for your own Linux</a>
+
+<ul>
+<li>東西弄完才看到的文章，入門好文</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="lk0_ref_data"></a></p>
+
+<h3>下次準備看的資料</h3>
+
+<ul>
+<li><a href="http://www.linux-magazine.com/Online/Features/Qemu-and-the-Kernel">Qemu and the Kernel</a>
+
+<ul>
+<li>使用Qemu debug kernel的資料</li>
+</ul>
+</li>
+<li><a href="http://unix.stackexchange.com/questions/90423/can-virtfs-9p-be-used-as-root-file-system">Stackoverflow: Can virtfs/9p be used as root file system?</a>
+
+<ul>
+<li>Qemu和Host主機共享資料，甚至直接把rootfs放host讓qemu去讀取的方式</li>
+</ul>
+</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ARM CM4 Pratice (4): Semihosting]]></title>
@@ -222,33 +427,57 @@ static int host_call(enum HOST_SYSCALL action, void *arg)
 </code></pre>
 
 <p>剩下就簡單了，設定好參數呼叫semihosting的介面收工。
-&#8220;`c
-size_t host_read(int fd, void *buf, size_t count)
-{
-    param semi_param[3] = {
-        { .pdInt = fd },
-        { .pdPtr = buf },
-        { .pdInt = count }
-    };</p>
-
-<pre><code>return host_call(HOSTCALL_READ, semi_param);
-</code></pre>
-
-<p>}</p>
-
-<p>size_t host_write(int fd, const void <em>buf, size_t count)
-{
-    param semi_param[3] = {
-        { .pdInt = fd },
-        { .pdPtr = (void </em>) buf },
-        { .pdInt = count }
-    };</p>
-
-<pre><code>return host_call(HOSTCALL_WRITE, semi_param);
-</code></pre>
-
-<p>}
-&#8220;`</p>
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="kt">size_t</span> <span class="nf">host_read</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">count</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">param</span> <span class="n">semi_param</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">{</span> <span class="p">.</span><span class="n">pdInt</span> <span class="o">=</span> <span class="n">fd</span> <span class="p">},</span>
+</span><span class='line'>        <span class="p">{</span> <span class="p">.</span><span class="n">pdPtr</span> <span class="o">=</span> <span class="n">buf</span> <span class="p">},</span>
+</span><span class='line'>        <span class="p">{</span> <span class="p">.</span><span class="n">pdInt</span> <span class="o">=</span> <span class="n">count</span> <span class="p">}</span>
+</span><span class='line'>    <span class="p">};</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="k">return</span> <span class="n">host_call</span><span class="p">(</span><span class="n">HOSTCALL_READ</span><span class="p">,</span> <span class="n">semi_param</span><span class="p">);</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="kt">size_t</span> <span class="n">host_write</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">&lt;</span><span class="n">em</span><span class="o">&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">count</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">param</span> <span class="n">semi_param</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>        <span class="p">{</span> <span class="p">.</span><span class="n">pdInt</span> <span class="o">=</span> <span class="n">fd</span> <span class="p">},</span>
+</span><span class='line'>        <span class="p">{</span> <span class="p">.</span><span class="n">pdPtr</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">&lt;/</span><span class="n">em</span><span class="o">&gt;</span><span class="p">)</span> <span class="n">buf</span> <span class="p">},</span>
+</span><span class='line'>        <span class="p">{</span> <span class="p">.</span><span class="n">pdInt</span> <span class="o">=</span> <span class="n">count</span> <span class="p">}</span>
+</span><span class='line'>    <span class="p">};</span><span class="o">&lt;/</span><span class="n">p</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">pre</span><span class="o">&gt;&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="k">return</span> <span class="n">host_call</span><span class="p">(</span><span class="n">HOSTCALL_WRITE</span><span class="p">,</span> <span class="n">semi_param</span><span class="p">);</span>
+</span><span class='line'><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;&lt;/</span><span class="n">pre</span><span class="o">&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">&lt;</span><span class="n">p</span><span class="o">&gt;</span><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure></p>
 
 <p><a name="stm-4-test-makefile"></a></p>
 
@@ -1097,12 +1326,15 @@ SRCS += led.c
 
 
 <p>上面的是source檔案，但是我們編譯需要把source檔案轉成object檔案並且存在./build目錄下。
-&#8220;`Makefile
-C_OBJS = $(patsubst %.c, %.o, $(SRCS))   # translate <em>.c to </em>.o
-OBJS   = $(patsubst %.s, %.o, $(C_OBJS)) # also <em>.s to </em>.o files</p>
-
-<p>OUT_OBJS = $(addprefix $(OUT_DIR)/, $(OBJS))
-&#8220;`</p>
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='Makefile'><span class='line'><span class="nv">C_OBJS</span> <span class="o">=</span> <span class="k">$(</span>patsubst %.c, %.o, <span class="k">$(</span>SRCS<span class="k">))</span>   <span class="c"># translate &lt;em&gt;.c to &lt;/em&gt;.o</span>
+</span><span class='line'><span class="nv">OBJS</span>   <span class="o">=</span> <span class="k">$(</span>patsubst %.s, %.o, <span class="k">$(</span>C_OBJS<span class="k">))</span> <span class="c"># also &lt;em&gt;.s to &lt;/em&gt;.o files&lt;/p&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="err">&lt;p&gt;</span><span class="nv">OUT_OBJS</span> <span class="o">=</span> <span class="k">$(</span>addprefix <span class="k">$(</span>OUT_DIR<span class="k">)</span>/, <span class="k">$(</span>OBJS<span class="k">))</span>
+</span></code></pre></td></tr></table></div></figure></p>
 
 <ul>
 <li>產生led.bin</li>
@@ -1583,348 +1815,6 @@ size: 11596
 <li>交叉比對用</li>
 </ul>
 </li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ARM CM4 Pratice (0): Environment Setup]]></title>
-    <link href="http://wen00072.github.io/blog/2016/04/06/arm-cm4-pratice-0-environment-setup/"/>
-    <updated>2016-04-06T22:15:15+08:00</updated>
-    <id>http://wen00072.github.io/blog/2016/04/06/arm-cm4-pratice-0-environment-setup</id>
-    <content type="html"><![CDATA[<p>很久以前買了<a href="http://www.st.com/web/catalog/tools/FM116/SC959/SS1532/PF259090">STM32F4 Disco的開發版</a>（<a href="http://wiki.csie.ncku.edu.tw/embedded/STM32F429">繁體中文資訊</a>），最近開始想要學習ARM架構和硬體控制等技術。在設定目標，規劃進度前，一定要先把編譯和燒錄環境架設起來，整理如下：</p>
-
-<h2>目錄</h2>
-
-<ul>
-<li><a href="#cm4-0-env">安裝作業系統環境</a></li>
-<li><a href="#cm4-0-steps">安裝步驟</a>
-
-<ul>
-<li><a href="#cm4-0-steps-tl">安裝Toolchain</a></li>
-<li><a href="#cm4-0-steps-pkg-install">手動安裝燒錄和除錯工具</a>
-
-<ul>
-<li><a href="#cm4-0-steps-pkg-install-prepare">安裝需要套件</a></li>
-<li><a href="#cm4-0-steps-pkg-install-stlink">手動安裝st-link</a></li>
-<li><a href="#cm4-0-steps-pkg-install-openocd">手動安裝OpenOCD</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><a href="#cm4-0-test">驗證燒錄</a>
-
-<ul>
-<li><a href="#cm4-0-test-prepare">事前準備</a></li>
-<li><a href="#cm4-0-test-stflash">使用st-flash 開發版燒錄</a></li>
-<li><a href="#cm4-0-test-openocd">使用openocd 開發版燒錄</a></li>
-</ul>
-</li>
-<li><a href="#cm4-0-ref">參考資料</a></li>
-</ul>
-
-
-<p><a name="cm4-0-env"></a></p>
-
-<h2>安裝作業系統環境</h2>
-
-<pre><code>$ lsb_release -a
-No LSB modules are available.
-Distributor ID: Ubuntu
-Description:    Ubuntu 14.04.4 LTS
-Release:    14.04
-Codename:   trusty
-</code></pre>
-
-<p><a name="cm4-0-steps"></a></p>
-
-<h2>安裝步驟</h2>
-
-<p>要開發非本機的平台，我們會需要安裝</p>
-
-<ul>
-<li>Toolchain：提供編譯，函數，分析binary等功能</li>
-<li>燒錄軟體</li>
-<li>除錯工具</li>
-</ul>
-
-
-<p>st-link和openocd同時有燒錄和開發版軟體除錯的功能，因此我們兩個都安裝。</p>
-
-<p><a name="cm4-0-steps-tl"></a></p>
-
-<h3>安裝Toolchain</h3>
-
-<p>網路上找到<a href="https://launchpad.net/gcc-arm-embedded">GCC ARM Embedded (ARM R和M系列使用 )</a>的PPA。簡單找一下網路，<strong><font color="red">沒有直接證據說這邊的PPA是由ARM官方維護</font></strong>。不過在<a href="http://yottadocs.mbed.com/#installing-on-linux">mbed(ARM 成立的IoT作業系統)網站裏面</a>的確有提到這個PPA，暫時當作間接證據。<strong><font color="red">目前我還沒有驗證這個Toolchain編譯出來的binary是否可以在開發版上正常動作</font></strong>。</p>
-
-<pre><code class="text 安裝Toolchain指令">sudo add-apt-repository ppa:team-gcc-arm-embedded/ppa
-sudo apt-get update
-sudo apt-get install gcc-arm-embedded
-</code></pre>
-
-<p><a name="cm4-0-steps-pkg-install"></a></p>
-
-<h3>手動安裝燒錄和除錯工具</h3>
-
-<p><a name="cm4-0-steps-pkg-install-prepare"></a></p>
-
-<h4>安裝需要套件</h4>
-
-<pre><code class="text 系統安裝設定STM32F4環境相關套件 ">sudo apt-get install git
-sudo apt-get install libtool
-sudo apt-get install automake
-sudo apt-get install autoconf
-sudo apt-get install pkg-config
-sudo apt-get install libusb-1.0-0-dev
-sudo apt-get install libftdi-dev   # 當openocd要支援MPSSE mode才需要裝，這是啥我不知道。
-sudo apt-get install libhidapi-dev # 當openocd要支援CMSIS-DAP才會用到，這是啥我不知道。
-</code></pre>
-
-<p>我自己的習慣是非必要不會放在系統中，<strong>接下來的指令都是預設<code>st-link</code>和<code>openocd</code>裝到<code>$HOME/bin</code>中</strong>，Ubuntu在登入時會自動將<code>~/bin</code>加入<code>PATH</code>中。</p>
-
-<p>如果您沒有~/bin的話，請使用下面指令建立。
-<code>
-mkdir ~/bin/
-. ~/.profile # 強迫系統自動將`~/bin`加入`PATH`中
-</code></p>
-
-<p><a name="cm4-0-steps-pkg-install-stlink"></a></p>
-
-<h4>手動安裝st-link</h4>
-
-<p>簡單講一下，就是下載、編譯、安裝軟體。特別要注意的是，為了要讓你的PC在使用Mini USB連到開發版後能夠讓Ubuntu的<code>udev</code>服務可以順利地偵測到開發版，需要加入相關設定並重新啟動<code>udev</code>服務。</p>
-
-<p>下載Source code
-<code>text 下載Source code  
-git clone https://github.com/texane/stlink
-</code></p>
-
-<p>編譯stlink
-<code>text 編譯
-cd stlink/
-./autogen.sh
-./configure
-make
-cp st-* ~/bin
-</code></p>
-
-<p>設定並重新起動udev
-<code>text 設定並重新起動udev
-sudo cp 49-stlinkv* /etc/udev/rules.d/ -rv
-sudo service udev restart
-</code></p>
-
-<p>驗證一下是否可以偵測到開發版，請確定測試前開發版已經和您的電腦透過Mini USB連線，以及有設定<code>udev</code>並且重新啟動。</p>
-
-<pre><code class="text   ">$ st-probe 
-Found 1 stlink programmers
-30303030303030303030303100
-     flash: 2097152 (pagesize: 16384)
-      sram: 262144
-    chipid: 0x0419
-     descr: F42x and F43x device
-</code></pre>
-
-<p><a name="cm4-0-steps-pkg-install-openocd"></a></p>
-
-<h4>手動安裝OpenOCD</h4>
-
-<p>下載Source code
-<code>text 下載Source code
-git clone git://git.code.sf.net/p/openocd/code openocd-code
-</code></p>
-
-<p>編譯
-<code>text 編譯
-cd openocd-code/
-./bootstrap
-./configure # script會自動偵測系統是否有相依開發套件
-make
-</code></p>
-
-<p>安裝
-<code>text 安裝
-cp src/openocd ~/bin
-cp tcl/board/stm32f429discovery.cfg ~/.openocd/openocd.cfg
-cp tcl/* ~/.openocd
-</code></p>
-
-<p>驗證一下是否可以偵測到開發版，請確定測試前開發版已經和您的電腦透過Mini USB連線。</p>
-
-<pre><code class="text">$ openocd 
-Open On-Chip Debugger 0.10.0-dev-00250-g9c37747 (2016-04-07-22:20)
-Licensed under GNU GPL v2
-For bug reports, read
-    http://openocd.org/doc/doxygen/bugs.html
-Info : The selected transport took over low-level target control. The results might differ compared to plain JTAG/SWD
-adapter speed: 2000 kHz
-adapter_nsrst_delay: 100
-none separate
-srst_only separate srst_nogate srst_open_drain connect_deassert_srst
-Info : Unable to match requested speed 2000 kHz, using 1800 kHz
-Info : Unable to match requested speed 2000 kHz, using 1800 kHz
-Info : clock speed 1800 kHz
-Info : STLINK v2 JTAG v17 API v2 SWIM v0 VID 0x0483 PID 0x3748
-Info : using stlink api v2
-Info : Target voltage: 2.862887
-Info : stm32f4x.cpu: hardware has 6 breakpoints, 4 watchpoints
-</code></pre>
-
-<p><a name="cm4-0-test"></a></p>
-
-<h2>驗證燒錄</h2>
-
-<p><a name="cm4-0-test-parepare"></a></p>
-
-<h3>事前準備</h3>
-
-<p>下載jserv整理的STM 軔體
-<code>
-git clone https://github.com/jserv/stm32f429-demos
-</code></p>
-
-<p>將source中的hex轉成binary
-<code>
-cd stm32f429-demos/
-make
-</code></p>
-
-<p>使用下載提供的Makefile燒錄，裏面會先用openocd燒錄，失敗的話自動切到st-flash燒錄，非常建議讀一下Makefile。
-<code>
-make flash-demo檔案
-</code></p>
-
-<p>目前套件內蒐集的demo檔案</p>
-
-<ul>
-<li>flash-GamesInJava</li>
-<li>flash-STM32F429I-DISCOVERY_Demo_V1.0.1</li>
-<li>flash-Paint</li>
-<li>flash-TouchGFX-demo2014</li>
-<li>flash-STM32CubeDemo_STM32F429I-Discovery</li>
-</ul>
-
-
-<p><a name="cm4-0-test-stflash"></a></p>
-
-<h3>使用st-flash 開發版燒錄</h3>
-
-<ul>
-<li><code>st-flash write 軔體binary檔案名稱 0x8000000</code></li>
-</ul>
-
-
-<p>為什麼是<code>0x800000</code>呢？可以查一下<a href="http://www.st.com/web/en/resource/technical/document/datasheet/DM00071990.pdf">手冊</a>，上面有說這塊記憶體是分配給flash memory。</p>
-
-<p><a name="cm4-0-test-openocd"></a></p>
-
-<h4>使用openocd 開發版燒錄</h4>
-
-<p>從<a href="https://github.com/jserv/stm32f429-demos">GitHub: jserv/stm32f429-demos</a>裏面的Makefile抄來的。指令比較長，不過這是因為openocd可以把一系列的命令連發的關係</p>
-
-<pre><code>openocd -f interface/stlink-v2.cfg  -f target/stm32f4x.cfg  -c "init"  -c "reset init"  -c "stm32f2x unlock 0"  -c "flash probe 0"  -c "flash info 0"  -c "flash write_image erase 軔體binary檔案名稱 0x8000000"  -c "reset run" -c shutdown
-</code></pre>
-
-<p>使用比較好看的排版
-<code>
-openocd -f interface/stlink-v2.cfg  \
-        -f target/stm32f4x.cfg      \
-        -c "init"                   \
-        -c "reset init"             \
-        -c "stm32f2x unlock 0"      \
-        -c "flash probe 0"          \
-        -c "flash info 0"           \
-        -c "flash write_image erase 軔體binary檔案名稱 0x8000000" \
-        -c "reset run" -c shutdown
-</code></p>
-
-<h4>參數說明</h4>
-
-<ul>
-<li><code>-f</code>
-
-<ul>
-<li>指定config檔案。你可能會想問說interface目錄在那邊，還記得<a href="cm4-0-steps-pkg-install-openocd">前面</a>的動作嘛？</li>
-<li>可以指定
-
-<ul>
-<li>interface: 除錯使用的介面</li>
-<li>target: 執行的平台CPU如STM32F4</li>
-<li>board: 開發版</li>
-</ul>
-</li>
-</ul>
-</li>
-<li><code>-c</code>
-
-<ul>
-<li>執行openocd指令</li>
-</ul>
-</li>
-</ul>
-
-
-<h4>指令說明</h4>
-
-<ul>
-<li><code>-f interface/stlink-v2.cfg</code></li>
-<li><code>-f target/stm32f4x.cfg</code></li>
-<li><code>-c "init"</code>
-
-<ul>
-<li>結束config stage，開始進入run stage (<a href="http://openocd.org/doc/html/Daemon-Configuration.html#Entering-the-Run-Stage">出處</a>)</li>
-</ul>
-</li>
-<li><code>-c "reset init"</code>
-
-<ul>
-<li>reset 開發版，重新開機(<a href="http://openocd.org/doc/html/General-Commands.html#Target-State-handling">出處</a>)後進入init狀態。</li>
-</ul>
-</li>
-<li><code>-c "stm32f2x unlock 0"</code>
-
-<ul>
-<li>將開發版的flash解鎖(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
-</ul>
-</li>
-<li><code>-c "flash probe 0"</code>
-
-<ul>
-<li>偵測開發版的flash(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
-</ul>
-</li>
-<li><code>-c "flash info 0"</code>
-
-<ul>
-<li>顯示開發版的flash資訊(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
-</ul>
-</li>
-<li><code>-c "flash write_image erase 軔體binary檔案名稱 0x8000000"</code>
-
-<ul>
-<li>將檔案寫入flash(<a href="http://openocd.org/doc/html/Flash-Commands.html#Flash-Configuration-Commands">出處</a>)</li>
-</ul>
-</li>
-<li><code>-c "reset run" -c shutdown</code>
-
-<ul>
-<li>正常重新開機(<a href="http://openocd.org/doc/html/General-Commands.html#Target-State-handling">出處</a>)</li>
-</ul>
-</li>
-</ul>
-
-
-<p><a name="cm4-0-ref"></a></p>
-
-<h2>參考資料</h2>
-
-<ul>
-<li><a href="http://yottadocs.mbed.com/#installing-on-linux">yotta Documentation: Install on Linux</a></li>
-<li><a href="https://launchpad.net/gcc-arm-embedded">ARM Embedded PPA網站</a></li>
-<li><a href="https://launchpad.net/~team-gcc-arm-embedded/+archive/ubuntu/ppa">GNU ARM Embedded Toolchain</a></li>
-<li><a href="https://github.com/jserv/stm32f429-demos">GitHub: jserv/stm32f429-demos</a></li>
-<li><a href="http://openocd.org/doc/html/">OpenOCD手冊</a></li>
 </ul>
 
 ]]></content>

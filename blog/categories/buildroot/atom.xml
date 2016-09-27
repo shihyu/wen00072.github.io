@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Buildroot | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/buildroot/atom.xml" rel="self"/>
+  <link href="http://wen00072.github.io/"/>
+  <updated>2016-09-27T14:45:19+08:00</updated>
+  <id>http://wen00072.github.io/</id>
+  <author>
+    <name><![CDATA[Wen Liao]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Linux Kernel Pratice 0: Buildroot (1)]]></title>
+    <link href="http://wen00072.github.io/blog/2016/09/27/linux-kernel-pratice-0-buildroot-setup-with-qemu/"/>
+    <updated>2016-09-27T09:43:20+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/09/27/linux-kernel-pratice-0-buildroot-setup-with-qemu</id>
+    <content type="html"><![CDATA[<p>理論上不應該要邊移動邊開火，延長戰線。不過計劃趕不上變化，既來之則安之。</p>
+
+<p>最近因為特別因素開始學習Linux kernel，看能不能Linux kernel和STM32兩邊都不要漏掉。不管怎樣，學習和實習絕對分不開，所以還是從環境架設開始吧。這次的實習環境架設的目標是：</p>
+
+<ol>
+<li>可以使用ARM 平台。一方面追求流行，一方面我不想再開x86這個副本</li>
+<li>可以方便地建立ARM平台的Linux Rootfs和kernel版本</li>
+<li>可以方便地更改指定要編譯的Kernel版本</li>
+<li>透過Qemu ，使用2的Rootfs和kernel開機</li>
+<li>透過Qemu和搭配的工具可以分析Linux kernel的run time 行為</li>
+</ol>
+
+
+<p>今天只有辦到1和2而已，剩下的還要繼續努力。</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#lk0_env">測試環境</a></li>
+<li><a href="#lk0_ins">安裝Buildroot</a>
+
+<ul>
+<li><a href="#lk0_ins_dl">下載Buildroot</a></li>
+<li><a href="#lk0_ins_set">設定ARM 環境</a></li>
+<li><a href="#lk0_ins_build">編譯及輸出</a></li>
+</ul>
+</li>
+<li><a href="#lk0_test">測試</a></li>
+<li><a href="#lk0_ref">參考資料</a>
+
+<ul>
+<li><a href="#lk0_ref_data">下次準備看的資料</a></li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="lk0_env"></a></p>
+
+<h2>測試環境</h2>
+
+<p>因為我已經裝過開發相關的套件，因此如果您是新手可能要自行摸索也許有需要另外安裝的套件如<code>git</code>。嘛，練習解讀錯誤訊息也是一種學習。</p>
+
+<pre>
+$ lsb_release -a
+No LSB modules are available.
+Distributor ID: Ubuntu
+Description:    Ubuntu 14.04.5 LTS
+Release:    14.04
+Codename:   trusty
+</pre>
+
+
+<p><a name="lk0_ins"></a></p>
+
+<h2>安裝Buildroot</h2>
+
+<p>主要分成下面三個步驟</p>
+
+<ul>
+<li><a href="#lk0_ins_dl">下載Buildroot</a></li>
+<li><a href="#lk0_ins_set">設定ARM 環境</a></li>
+<li><a href="#lk0_ins_build">編譯及輸出</a></li>
+</ul>
+
+
+<p><a name="lk0_ins_dl"></a></p>
+
+<h3>下載Buildroot</h3>
+
+<p>直接看例子，剪下貼上就好</p>
+
+<pre><code class="sh">mkdir buildroot
+cd buildroot
+git clone git://git.buildroot.net/buildroot
+</code></pre>
+
+<p><a name="lk0_ins_set"></a></p>
+
+<h3>設定ARM 環境</h3>
+
+<p>網路上查到大部分都是從<code>make menuconfig</code>開始。不過我是很<strong>明確地</strong>要用<code>Qemu</code>跑ARM的系統。所以就找了一下發現有下面的指令</p>
+
+<pre><code class="text">make qemu_x86_defconfig
+</code></pre>
+
+<p>想說既然有<code>x86_defconfig</code>，那應該有<code>arm_defconfig</code>吧? 錯！那我就去<code>buildroot/board/qemu</code>目錄下找，有看到<code>arm-versatile</code>。印象中<a href="blog/2015/02/07/by-qemu-arm-installation-of-debian-systems/">以前</a>有用過Qemu跑的Debian系統也是<code>versatile</code>。所以就很高興地下了</p>
+
+<pre><code class="text">make qemu_arm-versatile_defconfig
+</code></pre>
+
+<p>結果一樣GG，估狗查才知道正確的用法是：</p>
+
+<pre><code>make qemu_arm_versatile_defconfig
+</code></pre>
+
+<p>接下來就用<code>make menuconfig</code>做細項調整，我主要是改成</p>
+
+<ol>
+<li>使用glibc</li>
+<li>使用gcc 4.8
+
+<ul>
+<li>預設5.x，因為我想要編Linux kernel 4.4.2。以前PC經驗使用gcc 5.x極端痛苦，後來還是換回gcc 4.8</li>
+</ul>
+</li>
+<li>一些除錯設定</li>
+</ol>
+
+
+<p>另外本來想要嘗試設定更動Kernel版本，但是發現需要更進一步的了解buildroot才能夠達成。當作下次目標吧。</p>
+
+<p><a name="lk0_ins_build"></a></p>
+
+<h3>編譯及輸出</h3>
+
+<p>編譯只要下<code>make</code>就會幫你下載和編譯開機需要的</p>
+
+<ol>
+<li>套件和一些常用工具，並封裝到<code>output/image/roofs.ext2</code></li>
+<li>Kernel(預設4.7)，編譯成<code>zImage</code>，放在<code>output/image/zImage</code></li>
+</ol>
+
+
+<p><a name="lk0_test"></a></p>
+
+<h2>測試</h2>
+
+<p>接下來也不難，可以參考<code>board/qemu/arm-versatile/readme.txt</code>
+簡單來說就是執行下面指令，開機完使用<code>root</code>登入不用密碼，使用<code>poweroff</code>後再手動離開qemu。</p>
+
+<pre><code class="sh">qemu-system-arm -M versatilepb -kernel output/images/zImage -dtb output/images/versatile-pb.dtb -drive file=output/images/rootfs.ext2,if=scsi,format=raw -append "root=/dev/sda console=ttyAMA0,115200" -serial stdio -net nic,model=rtl8139 -net user
+</code></pre>
+
+<p>執行畫面如下</p>
+
+<pre><code class="text">$ qemu-system-arm -M versatilepb -kernel output/images/zImage -dtb output/images/versatile-pb.dtb -drive file=output/images/rootfs.ext2,if=scsi,format=raw -append "root=/dev/sda console=ttyAMA0,115200" -serial stdio -net nic,model=rtl8139 -net user
+...
+Booting Linux on physical CPU 0x0
+Linux version 4.7.0 (user@host) (gcc version 4.8.5 (Buildroot 2016.11-git-00439-g14b2472) ) #1 Mon Sep 26 22:36:42 CST 2016
+CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+CPU: VIVT data cache, VIVT instruction cache
+Machine model: ARM Versatile PB
+....
+EXT4-fs (sda): re-mounted. Opts: block_validity,barrier,user_xattr,errors=remount-ro
+Starting logging: OK
+Initializing random number generator... random: dd urandom read with 46 bits of entropy available
+done.
+Starting network: 8139cp 0000:00:0c.0 eth0: link up, 100Mbps, full-duplex, lpa 0x05E1
+...
+adding dns 10.0.2.3
+OK
+
+Welcome to Buildroot
+buildroot login: root
+#
+</code></pre>
+
+<p><a name="lk0_ref"></a></p>
+
+<h2>參考資料</h2>
+
+<ul>
+<li><a href="https://buildroot.org/downloads/manual/manual.html">The Buildroot user manual</a>
+
+<ul>
+<li>只有看部份，不過官方文件本來就是應該放在第一位</li>
+</ul>
+</li>
+<li><a href="http://pressreset.net/2013/09/buildroot-and-qemu-the-quickest-receipe-for-your-own-linux/">Buildroot and QEMU – the quickest receipe for your own Linux</a>
+
+<ul>
+<li>東西弄完才看到的文章，入門好文</li>
+</ul>
+</li>
+</ul>
+
+
+<p><a name="lk0_ref_data"></a></p>
+
+<h3>下次準備看的資料</h3>
+
+<ul>
+<li><a href="http://www.linux-magazine.com/Online/Features/Qemu-and-the-Kernel">Qemu and the Kernel</a>
+
+<ul>
+<li>使用Qemu debug kernel的資料</li>
+</ul>
+</li>
+<li><a href="http://unix.stackexchange.com/questions/90423/can-virtfs-9p-be-used-as-root-file-system">Stackoverflow: Can virtfs/9p be used as root file system?</a>
+
+<ul>
+<li>Qemu和Host主機共享資料，甚至直接把rootfs放host讓qemu去讀取的方式</li>
+</ul>
+</li>
+</ul>
+
+]]></content>
+  </entry>
+  
+</feed>

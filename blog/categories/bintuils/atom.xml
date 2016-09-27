@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Bintuils | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/bintuils/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-09-21T17:35:25+08:00</updated>
+  <updated>2016-09-27T14:45:19+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -1137,16 +1137,23 @@ clean:
 <p>至於要怎麼知道binary格式和架構呢？您可以用<code>objcopy --info |less</code>配合<code>file test_obj.o</code>找出平台上的參數。</p>
 
 <p>我們先來看一下section是不是真的放到.mydata?
-&#8220;`text objdump結果
-$ objdump -h my_data.o</p>
-
-<p>my_data.o:     file format elf64-x86-64</p>
-
-<p>Sections:
-Idx Name          Size      VMA               LMA               File off  Algn
-  0 .mydata.data  00000007  0000000000000000  0000000000000000  00000040  2**0
-                  CONTENTS, ALLOC, LOAD, DATA
-&#8220;`</p>
+<figure class='code'><figcaption><span>objdump結果</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ objdump -h my_data.o&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;my_data.o:     file format elf64-x86-64&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;Sections:
+</span><span class='line'>Idx Name          Size      VMA               LMA               File off  Algn
+</span><span class='line'>  0 .mydata.data  00000007  0000000000000000  0000000000000000  00000040  2**0
+</span><span class='line'>                  CONTENTS, ALLOC, LOAD, DATA
+</span></code></pre></td></tr></table></div></figure></p>
 
 <p>我只知道.mydata的section，裏面的資訊目前還不清楚有什麼意義。</p>
 
