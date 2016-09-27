@@ -4,7 +4,7 @@
   <title><![CDATA[My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-09-27T14:45:19+08:00</updated>
+  <updated>2016-09-27T15:08:07+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -123,6 +123,9 @@ Codename:   trusty
 </pre></td><td class='code'><pre><code class='text'><span class='line'>make qemu_arm_versatile_defconfig
 </span></code></pre></td></tr></table></div></figure>
 
+
+<p><strong>更新</strong>
+後來看手冊才知道有<code>make list-defconfigs</code>可以查詢有哪些default config，果然前輩說RTFM是對的，唉。</p>
 
 <p>接下來就用<code>make menuconfig</code>做細項調整，我主要是改成</p>
 
