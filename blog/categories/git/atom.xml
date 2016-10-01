@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Git | My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/blog/categories/git/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-10-01T21:32:41+08:00</updated>
+  <updated>2016-10-01T23:24:21+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -12,355 +12,6 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
-  
-  <entry>
-    <title type="html"><![CDATA[再談 Git Remote]]></title>
-    <link href="http://wen00072.github.io/blog/2016/01/24/talk-about-git-remote/"/>
-    <updated>2016-01-24T20:30:32+08:00</updated>
-    <id>http://wen00072.github.io/blog/2016/01/24/talk-about-git-remote</id>
-    <content type="html"><![CDATA[<ul>
-<li>更新：
-
-<ul>
-<li>Apr/09/2016：感謝網友柏瑀的告知，修正白字。</li>
-</ul>
-</li>
-</ul>
-
-
-<p>git remote 是一個常常被忽略的東西，這次就來看看這個指令和對應的觀念吧。</p>
-
-<p>一樣，先講測試環境，避免無法reproduce的問題。</p>
-
-<pre><code class="text">$ lsb_release -a
-No LSB modules are available.
-Distributor ID: Ubuntu
-Description:    Ubuntu 14.04.3 LTS
-Release:    14.04
-Codename:   trusty
-
-$ git --version
-git version 2.7.0
-</code></pre>
-
-<p>本次介紹目錄如下</p>
-
-<ul>
-<li><a href="#gr_gb">背景說明</a></li>
-<li><a href="#gr_cmd">git remote指令介紹</a>
-
-<ul>
-<li><a href="#gr_cmd_status">查詢remote資訊</a></li>
-<li><a href="#gr_cmd_add">新增remote</a></li>
-<li><a href="#gr_cmd_fetch">拉remote repository</a></li>
-<li><a href="#gr_cmd_push">remote的branch操作</a></li>
-<li><a href="#gr_cmd_rm">刪除remote</a></li>
-</ul>
-</li>
-</ul>
-
-
-<p><a name="gr_gb"></a></p>
-
-<h2>背景說明</h2>
-
-<p>先來問問男人<code>git remote</code>是什麼吧？</p>
-
-<pre><code>GIT-REMOTE(1)                                     Git Manual                                    GIT-REMOTE(1)
-
-NAME
-       git-remote - Manage set of tracked repositories
-</code></pre>
-
-<p>白話來說，<code>git remote</code>是用來管理<font color="red">多個</font>tracked repositories。（中文難翻，意思是你要追蹤的git repository）。在大部分的情況，<code>git clone</code>下來後只需要和原本clone的遠端互動的話，你只有一個remote，那麼你機乎不會感受到remote的運作，我天生駑鈍，剛開始只是覺得奇怪怎麼有時候後會有個<code>origin</code>跑出來而已。</p>
-
-<p>如果夠幸運（還是不幸？）你不太會需要遇到需要處理remote的情況。不過在github上面，倒是蠻有機會要用到remote，情境如下。</p>
-
-<ul>
-<li>你在github上面有帳號，要fork別人的project <code>A</code>，fork來的稱為<code>A+</code></li>
-<li>你在<code>A+</code>開發，同時<code>A</code>也在開發</li>
-<li><code>A+</code>有需要和<code>A</code>同步，也許是<code>A</code>有新功能，或是你要回饋程式碼總不能回饋和<code>A</code>差異太大的程式碼</li>
-</ul>
-
-
-<p><code>A+</code>和<code>A</code>同步，是remote常用的情境。常用到github直接給<a href="https://help.github.com/articles/configuring-a-remote-for-a-fork/">懶人包</a>。大概描述如下：</p>
-
-<ul>
-<li><code>A+</code>加一個remote，URL為<code>A</code>的URL。白話來說，就是<code>A+</code>要track repository <code>A</code>。
-
-<ul>
-<li>remote必須給個名字，github的<a href="https://help.github.com/articles/configuring-a-remote-for-a-fork/">懶人包</a>上給的名字叫upstream。</li>
-</ul>
-</li>
-<li>既然加了一個tracked repository，你就可以做
-
-<ul>
-<li>拉remote程式碼下來</li>
-<li>切換到remote下面的branch</li>
-<li><strong>merge remote 的branch</strong></li>
-</ul>
-</li>
-</ul>
-
-
-<p><a name="gr_cmd"></a></p>
-
-<h2>git remote指令介紹</h2>
-
-<p>在介紹指令之前，先建立示範git repository 以便下面的說明。情境如下</p>
-
-<ol>
-<li>建立新的git repository，稱為<code>repo_1</code></li>
-<li>clone <code>repo_1</code>到<code>repo_2</code></li>
-<li>clone <code>repo_2</code>到<code>repo_3</code></li>
-</ol>
-
-
-<pre><code>$ git init repo_1
-Initialized empty Git repository in /tmp/test_remote/repo_1/.git/
-
-$ cd repo_1/
-/repo_1$ touch test_file &amp;&amp; git add test_file &amp;&amp; git commit -a -m "init for test"
-[master (root-commit) 6847c3c] init for test
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 test_file
-
-$ cd ../
-
-$ git clone --bare repo_1 repo_2 
-Cloning into bare repository 'repo_2'...
-done.
-
-$ git clone repo_2/ repo_3
-Cloning into 'repo_3'...
-done.
-</code></pre>
-
-<p>關於repo_2的&ndash;bare部份，一言難盡。長話短說，不這樣幹repo_3不能push到repo_2，有興趣可以看<a href="http://stackoverflow.com/questions/2816369/git-push-error-remote-rejected-master-master-branch-is-currently-checked">這邊</a>。</p>
-
-<p>如果你的git repository是clone過來的，一定會有一個預設remote。沒意外的會叫<code>origin</code> <del>(什麼？你的remote叫<code>aosp</code>? 呃太複雜不討論)</del>，接下來你可以對於remote 操作，分別說明如下：</p>
-
-<ul>
-<li><a href="#gr_cmd_status">查詢remote資訊</a></li>
-<li><a href="#gr_cmd_add">新增remote</a></li>
-<li><a href="#gr_cmd_fetch">拉remote repository</a></li>
-<li><a href="#gr_cmd_push">remote的branch操作</a></li>
-<li><a href="#gr_cmd_rm">刪除remote</a></li>
-</ul>
-
-
-<p><a name="gr_cmd_status"></a></p>
-
-<h2>查詢remote資訊</h2>
-
-<ul>
-<li><code>git remote</code>
-
-<ul>
-<li>顯示remote名稱</li>
-</ul>
-</li>
-<li><code>git remote -v</code>
-
-<ul>
-<li>顯示remote名稱及remote URL</li>
-</ul>
-</li>
-<li><code>git remote show remote名稱</code>
-
-<ul>
-<li>顯示<code>remote名稱</code>的詳細資訊</li>
-</ul>
-</li>
-</ul>
-
-
-<p>直接看範例</p>
-
-<pre><code>$ cd /tmp/test_remote/repo_3
-
-$ git remote
-origin
-
-$ git remote -v
-origin  /tmp/test_remote/repo_2/ (fetch)
-origin  /tmp/test_remote/repo_2/ (push)
-
-$ git remote show origin 
-* remote origin
-  Fetch URL: /tmp/test_remote/repo_2/
-  Push  URL: /tmp/test_remote/repo_2/
-  HEAD branch: master
-  Remote branch:
-    master tracked
-  Local branch configured for 'git pull':
-    master merges with remote master
-  Local ref configured for 'git push':
-    master pushes to master (up to date)
-</code></pre>
-
-<p><a name="gr_cmd_add"></a></p>
-
-<h2>新增remote</h2>
-
-<ul>
-<li><code>git add remote名稱 remote_repository_URL</code></li>
-</ul>
-
-
-<p>範例如下</p>
-
-<pre><code>$ git remote add upstream /tmp/test_remote/repo_1/
-
-$ git remote -v
-origin  /tmp/test_remote/repo_2/ (fetch)
-origin  /tmp/test_remote/repo_2/ (push)
-upstream    /tmp/test_remote/repo_1/ (fetch)
-upstream    /tmp/test_remote/repo_1/ (push)
-</code></pre>
-
-<p>新增完畢後，請記得<code>remote_名稱</code>、<code>remote_名稱 remote_branch_名稱</code>或<code>remote_名稱/remote_branch_名稱</code>是你要操作remote的參數。</p>
-
-<p>另外你還可以加入多個remote來場大亂鬥。例如你從<code>A</code> fork <code>A+</code>，也許有人fork 出來的<code>A++</code>有你想要的功能，就可以再把<code>A++</code>加入你<code>A</code> repository的remote。</p>
-
-<p><a name="gr_cmd_fetch"></a></p>
-
-<h2>拉remote repository</h2>
-
-<ul>
-<li><code>git fetch remote_名稱</code></li>
-<li><code>git pull remote_名稱/remote_branch_名稱</code></li>
-</ul>
-
-
-<p>我們先在<code>repo_1</code>開一個branch稱為<code>br1</code>
-&#8220;`
-$ cd /tmp/test_remote/repo_1/</p>
-
-<p>$ git checkout -b br1
-Switched to a new branch &lsquo;br1&rsquo;</p>
-
-<p>$ touch test_on_branch &amp;&amp; git add test_on_branch &amp;&amp; git commit test_on_branch -m &ldquo;test&rdquo;
-[br1 cc7222f] test
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 test_on_branch
-&#8220;`</p>
-
-<p>接下來就是範例時間
-&#8220;`
-$ git fetch upstream
-From /tmp/test_remote/repo_1
- * [new branch]      br1        -> upstream/br1
- * [new branch]      master     -> upstream/master</p>
-
-<p>$ ls
-test_file</p>
-
-<p>$ git pull upstream br1
-From /tmp/test_remote/repo_1
- * branch            br1        -> FETCH_HEAD
-Updating 6847c3c..cc7222f
-Fast-forward
- test_on_branch | 0
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 test_on_branch</p>
-
-<p>$ ls
-test_file  test_on_branch</p>
-
-<p>$ git status
-On branch master
-Your branch is ahead of &lsquo;origin/master&rsquo; by 1 commit.
-  (use &ldquo;git push&rdquo; to publish your local commits)
-nothing to commit, working directory clean
-<code>``
-注意最後的指令，因為我們pull了</code>upstream/br1<code>，所以local多了一個commit。因此訊息中有說你目前repository 比</code>origin/master<code>(你clone的remote/branch)多一個commit。你可以push回</code>origin/master`。</p>
-
-<p><a name="gr_cmd_push"></a></p>
-
-<h2>remote的branch操作</h2>
-
-<p>原則就是命令中有參數會是<code>remote_名稱</code>、<code>remote_名稱 remote_branch_名稱</code>或<code>remote_名稱/remote_branch_名稱</code>。</p>
-
-<ul>
-<li>切換
-&#8220;`
-$ git checkout upstream/br1
-Note: checking out &lsquo;upstream/br1&rsquo;.</li>
-</ul>
-
-
-<p>You are in &lsquo;detached HEAD&rsquo; state. You can look around, make experimental
-changes and commit them, and you can discard any commits you make in this
-state without impacting any branches by performing another checkout.</p>
-
-<p>If you want to create a new branch to retain commits you create, you may
-do so (now or later) by using -b with the checkout command again. Example:</p>
-
-<p>  git checkout -b <new-branch-name></p>
-
-<p>HEAD is now at bd026e3&hellip; test
-&#8220;`
-中間的一堆英文簡單來說是因為git checkout沒特別參數，git只是把HEAD指到命令中的hash而已。如果你要同時在local開一個branch，可以這樣幹：</p>
-
-<pre><code>$ git checkout --track  upstream/br1 
-Branch br1 set up to track remote branch br1 from upstream.
-Switched to a new branch 'br1'
-</code></pre>
-
-<ul>
-<li>merge</li>
-</ul>
-
-
-<pre><code># 先在upstream/br1建立新的commit
-$ cd /tmp/test_remote/repo_1/
-
-$ touch test1_on_branch &amp;&amp; git add test1_on_branch &amp;&amp; git commit test1_on_branch -m "test1"
-[br1 d82612a] test1
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 test1_on_branch
-
-# 切回repo_3
-cd /tmp/test_remote/repo_3
-
-# 先fetch
-$ git fetch upstream 
-remote: Counting objects: 2, done.
-remote: Compressing objects: 100% (2/2), done.
-remote: Total 2 (delta 0), reused 0 (delta 0)
-Unpacking objects: 100% (2/2), done.
-From /tmp/test_remote/repo_1
-   bd026e3..d82612a  br1        -&gt; upstream/br1
-
-# 再merge，事實上和git pull upstream br1 一樣效果（默）
-$ git merge upstream/br1 
-Updating bd026e3..d82612a
-Fast-forward
- test1_on_branch | 0
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 test1_on_branch
-</code></pre>
-
-<p><a name="gr_cmd_rm"></a></p>
-
-<h2>刪除remote</h2>
-
-<ul>
-<li>git remote remove remote名稱</li>
-</ul>
-
-
-<p>範例如下</p>
-
-<pre><code>$ git remote remove upstream 
-
-$ git remote -v
-origin  /tmp/test_remote/repo_2 (fetch)
-origin  /tmp/test_remote/repo_2 (push)
-</code></pre>
-]]></content>
-  </entry>
   
   <entry>
     <title type="html"><![CDATA[談談.git 目錄]]></title>
@@ -622,38 +273,60 @@ f57350c72987263c2b745690bdc8013fbbd6067c refs/tags/0.3.3@243
 </code></p>
 
 <p>看看<code>packed-refs</code>裏面是三小？有沒有發現和上面很像啊？
-&#8220;`
-$ cat .git/packed-refs</p>
-
-<h2>pack-refs with: peeled fully-peeled</h2>
-
-<p>c86b440bafe24caecfe0dbfbbd73031a1bcd1178 refs/remotes/origin/gtk3
-fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/remotes/origin/master
-22da092eb00b78946fd70de24427d702a77b925b refs/remotes/origin/next-release
-98ff18f84fad4686012bf6183734eeb1ec5d7f46 refs/remotes/origin/show_web_search_in_popup_menu
-9542889d17d276321d6da2de8d1f9d95f76fb483 refs/remotes/origin/transparent_background
-7a3629ab3da7c609cf3698319ab606ebae0998e7 refs/tags/0.3.2@221
-f57350c72987263c2b745690bdc8013fbbd6067c refs/tags/0.3.3@243
-522d1dc2568b5c7c256e05ca69412480e1afcfb3 refs/tags/0.3.4
-8e9d9520125f64a0b894a5d575f0c2d98c3ec06b refs/tags/0.3.4@301
-7031115a8ea1151efc1536b43a509774ca2c0777 refs/tags/0.3.7
-3f4dcbe6e1aa0045fbeb9f1f761ce035e65defea refs/tags/1.1
-098d158c8d8a7ce7c6b2c5c47c967c6137beced2 refs/tags/1.2
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cat .git/packed-refs&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h2&gt;pack-refs with: peeled fully-peeled&lt;/h2&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;c86b440bafe24caecfe0dbfbbd73031a1bcd1178 refs/remotes/origin/gtk3
+</span><span class='line'>fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/remotes/origin/master
+</span><span class='line'>22da092eb00b78946fd70de24427d702a77b925b refs/remotes/origin/next-release
+</span><span class='line'>98ff18f84fad4686012bf6183734eeb1ec5d7f46 refs/remotes/origin/show_web_search_in_popup_menu
+</span><span class='line'>9542889d17d276321d6da2de8d1f9d95f76fb483 refs/remotes/origin/transparent_background
+</span><span class='line'>7a3629ab3da7c609cf3698319ab606ebae0998e7 refs/tags/0.3.2@221
+</span><span class='line'>f57350c72987263c2b745690bdc8013fbbd6067c refs/tags/0.3.3@243
+</span><span class='line'>522d1dc2568b5c7c256e05ca69412480e1afcfb3 refs/tags/0.3.4
+</span><span class='line'>8e9d9520125f64a0b894a5d575f0c2d98c3ec06b refs/tags/0.3.4@301
+</span><span class='line'>7031115a8ea1151efc1536b43a509774ca2c0777 refs/tags/0.3.7
+</span><span class='line'>3f4dcbe6e1aa0045fbeb9f1f761ce035e65defea refs/tags/1.1
+</span><span class='line'>098d158c8d8a7ce7c6b2c5c47c967c6137beced2 refs/tags/1.2</span></code></pre></td></tr></table></div></figure></p>
 
 <p>看一下ref目錄，上面的那些reference並不存在在<code>.git/ref</code>裏面
-&#8220;`
-$ tree .git/refs/
-.git/refs/
-├── heads
-│   └── master
-├── remotes
-│   └── origin
-│       └── HEAD
-└── tags</p>
-
-<p>4 directories, 2 files
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ tree .git/refs/
+</span><span class='line'>.git/refs/
+</span><span class='line'>├── heads
+</span><span class='line'>│   └── master
+</span><span class='line'>├── remotes
+</span><span class='line'>│   └── origin
+</span><span class='line'>│       └── HEAD
+</span><span class='line'>└── tags&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;4 directories, 2 files</span></code></pre></td></tr></table></div></figure></p>
 
 <p>好，生一個branch看看。
 <code>
@@ -662,19 +335,28 @@ Switched to a new branch 'I_got_a_new_ref'
 </code></p>
 
 <p>喔喔！<code>.git/refs</code>出現了剛才產生的ref
-&#8220;`
-$ tree .git/refs/
-.git/refs/
-├── heads
-│   ├── I_got_a_new_ref
-│   └── master
-├── remotes
-│   └── origin
-│       └── HEAD
-└── tags</p>
-
-<p>4 directories, 3 files
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ tree .git/refs/
+</span><span class='line'>.git/refs/
+</span><span class='line'>├── heads
+</span><span class='line'>│   ├── I_got_a_new_ref
+</span><span class='line'>│   └── master
+</span><span class='line'>├── remotes
+</span><span class='line'>│   └── origin
+</span><span class='line'>│       └── HEAD
+</span><span class='line'>└── tags&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;4 directories, 3 files</span></code></pre></td></tr></table></div></figure></p>
 
 <p>跑一下<code>git gc</code>整理一下
 <code>
@@ -687,39 +369,62 @@ Total 5002 (delta 3913), reused 5002 (delta 3913)
 </code></p>
 
 <p>疑？剛才的branch不見了。
-&#8220;`
-$ tree .git/refs/
-.git/refs/
-├── heads
-├── remotes
-│   └── origin
-│       └── HEAD
-└── tags</p>
-
-<p>4 directories, 1 file
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ tree .git/refs/
+</span><span class='line'>.git/refs/
+</span><span class='line'>├── heads
+</span><span class='line'>├── remotes
+</span><span class='line'>│   └── origin
+</span><span class='line'>│       └── HEAD
+</span><span class='line'>└── tags&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;4 directories, 1 file</span></code></pre></td></tr></table></div></figure></p>
 
 <p>跑去pack-ref了
-&#8220;`
-$ cat .git/packed-refs</p>
-
-<h2>pack-refs with: peeled fully-peeled</h2>
-
-<p>fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/heads/I_got_a_new_ref
-fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/heads/master
-c86b440bafe24caecfe0dbfbbd73031a1bcd1178 refs/remotes/origin/gtk3
-fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/remotes/origin/master
-22da092eb00b78946fd70de24427d702a77b925b refs/remotes/origin/next-release
-98ff18f84fad4686012bf6183734eeb1ec5d7f46 refs/remotes/origin/show_web_search_in_popup_menu
-9542889d17d276321d6da2de8d1f9d95f76fb483 refs/remotes/origin/transparent_background
-7a3629ab3da7c609cf3698319ab606ebae0998e7 refs/tags/0.3.2@221
-f57350c72987263c2b745690bdc8013fbbd6067c refs/tags/0.3.3@243
-522d1dc2568b5c7c256e05ca69412480e1afcfb3 refs/tags/0.3.4
-8e9d9520125f64a0b894a5d575f0c2d98c3ec06b refs/tags/0.3.4@301
-7031115a8ea1151efc1536b43a509774ca2c0777 refs/tags/0.3.7
-3f4dcbe6e1aa0045fbeb9f1f761ce035e65defea refs/tags/1.1
-098d158c8d8a7ce7c6b2c5c47c967c6137beced2 refs/tags/1.2
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cat .git/packed-refs&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h2&gt;pack-refs with: peeled fully-peeled&lt;/h2&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/heads/I_got_a_new_ref
+</span><span class='line'>fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/heads/master
+</span><span class='line'>c86b440bafe24caecfe0dbfbbd73031a1bcd1178 refs/remotes/origin/gtk3
+</span><span class='line'>fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304 refs/remotes/origin/master
+</span><span class='line'>22da092eb00b78946fd70de24427d702a77b925b refs/remotes/origin/next-release
+</span><span class='line'>98ff18f84fad4686012bf6183734eeb1ec5d7f46 refs/remotes/origin/show_web_search_in_popup_menu
+</span><span class='line'>9542889d17d276321d6da2de8d1f9d95f76fb483 refs/remotes/origin/transparent_background
+</span><span class='line'>7a3629ab3da7c609cf3698319ab606ebae0998e7 refs/tags/0.3.2@221
+</span><span class='line'>f57350c72987263c2b745690bdc8013fbbd6067c refs/tags/0.3.3@243
+</span><span class='line'>522d1dc2568b5c7c256e05ca69412480e1afcfb3 refs/tags/0.3.4
+</span><span class='line'>8e9d9520125f64a0b894a5d575f0c2d98c3ec06b refs/tags/0.3.4@301
+</span><span class='line'>7031115a8ea1151efc1536b43a509774ca2c0777 refs/tags/0.3.7
+</span><span class='line'>3f4dcbe6e1aa0045fbeb9f1f761ce035e65defea refs/tags/1.1
+</span><span class='line'>098d158c8d8a7ce7c6b2c5c47c967c6137beced2 refs/tags/1.2</span></code></pre></td></tr></table></div></figure></p>
 
 <p><a name="gconf"></a></p>
 
@@ -751,16 +456,22 @@ f57350c72987263c2b745690bdc8013fbbd6067c refs/tags/0.3.3@243
 一樣，來看例子。</p>
 
 <p>目前clone下來，裏面放的是一個檔案，檔案裏面是什麼呢？一樣是個commit HASH
-&#8220;`
-$ cat .git/HEAD
-ref: refs/heads/master</p>
-
-<p>$ cat .git/refs/heads/master
-fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304</p>
-
-<p>$ git cat-file -t fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304
-commit
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cat .git/HEAD
+</span><span class='line'>ref: refs/heads/master&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ cat .git/refs/heads/master
+</span><span class='line'>fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ git cat-file -t fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304
+</span><span class='line'>commit</span></code></pre></td></tr></table></div></figure></p>
 
 <p>那我直接checkout一個不是branch的可以嘛？當然沒問題。
 可以看到git會把你checkout的commit HASH寫入.git/HEAD</p>
@@ -880,14 +591,18 @@ $ git commit file2 -m "file 2"
 </code></p>
 
 <p>切回master並且宰掉剛才的branch
-&#8220;`
-$ git checkout master
-Switched to branch &lsquo;master&rsquo;
-Your branch is up-to-date with &lsquo;origin/master&rsquo;.</p>
-
-<p>$ git branch -D demo_reflog<br/>
-Deleted branch demo_reflog (was b85f4d4).
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git checkout master
+</span><span class='line'>Switched to branch &lsquo;master&rsquo;
+</span><span class='line'>Your branch is up-to-date with &lsquo;origin/master&rsquo;.&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ git branch -D demo_reflog&lt;br/&gt;
+</span><span class='line'>Deleted branch demo_reflog (was b85f4d4).</span></code></pre></td></tr></table></div></figure></p>
 
 <p>假設上一個動作是手滑誤刪，能不能反悔。
 YES YOU CAN!</p>
@@ -969,49 +684,82 @@ $ git commit tree/file -m "test tree and file"
 </code></p>
 
 <p>然後看看這個目錄變化吧
-&#8220;`
-$ tree .git/objects/
-.git/objects/
-├── 2b
-│   └── a01ef5583f35dd57b5fb5bde732f73bc315b6d
-├── 9d
-│   └── aeafb9864cf43055ae93beb0afd6c7d144bfa4
-├── de
-│   └── f69c2c316574aaf328e546486fa750eb9c53a0
-├── e1
-│   └── b8ecbb1f19709f3a4867a0ffe08bb2e07acf19
-├── info
-└── pack
-    ├── pack-6042320de285747900cc3263a47f7bab429cabf8.idx
-    └── pack-6042320de285747900cc3263a47f7bab429cabf8.pack</p>
-
-<p>6 directories, 6 files
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ tree .git/objects/
+</span><span class='line'>.git/objects/
+</span><span class='line'>├── 2b
+</span><span class='line'>│   └── a01ef5583f35dd57b5fb5bde732f73bc315b6d
+</span><span class='line'>├── 9d
+</span><span class='line'>│   └── aeafb9864cf43055ae93beb0afd6c7d144bfa4
+</span><span class='line'>├── de
+</span><span class='line'>│   └── f69c2c316574aaf328e546486fa750eb9c53a0
+</span><span class='line'>├── e1
+</span><span class='line'>│   └── b8ecbb1f19709f3a4867a0ffe08bb2e07acf19
+</span><span class='line'>├── info
+</span><span class='line'>└── pack
+</span><span class='line'>    ├── pack-6042320de285747900cc3263a47f7bab429cabf8.idx
+</span><span class='line'>    └── pack-6042320de285747900cc3263a47f7bab429cabf8.pack&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;6 directories, 6 files</span></code></pre></td></tr></table></div></figure></p>
 
 <p>接下來把目錄和檔案混起來，用<code>git cat-file -p</code>看看裏面是啥
-&#8220;`
-$ git cat-file -p 2ba01ef5583f35dd57b5fb5bde732f73bc315b6d
-tree def69c2c316574aaf328e546486fa750eb9c53a0
-parent fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304
-author Wen.Liao <censored> 1425999641 +0800
-committer Wen.Liao <censored> 1425999641 +0800</p>
-
-<p>test tree and file
-<code>
-</code>
-$ git cat-file -p 9daeafb9864cf43055ae93beb0afd6c7d144bfa4
-test
-<code>
-</code>
-$ git cat-file -p def69c2c316574aaf328e546486fa750eb9c53a0
-100644 blob 5bc4b3f69d730535eb3a8aee28d7ef9273225d50    .gitignore
-&hellip;
-040000 tree e1b8ecbb1f19709f3a4867a0ffe08bb2e07acf19    tree
-<code>
-</code>
-$ git cat-file -p e1b8ecbb1f19709f3a4867a0ffe08bb2e07acf19
-100644 blob 9daeafb9864cf43055ae93beb0afd6c7d144bfa4    file
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git cat-file -p 2ba01ef5583f35dd57b5fb5bde732f73bc315b6d
+</span><span class='line'>tree def69c2c316574aaf328e546486fa750eb9c53a0
+</span><span class='line'>parent fd5d6abe34f41f8687c1fc5e2ab0a2f65c570304
+</span><span class='line'>author Wen.Liao &lt;censored&gt; 1425999641 +0800
+</span><span class='line'>committer Wen.Liao &lt;censored&gt; 1425999641 +0800&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;test tree and file
+</span><span class='line'>&lt;code&gt;
+</span><span class='line'>&lt;/code&gt;
+</span><span class='line'>$ git cat-file -p 9daeafb9864cf43055ae93beb0afd6c7d144bfa4
+</span><span class='line'>test
+</span><span class='line'>&lt;code&gt;
+</span><span class='line'>&lt;/code&gt;
+</span><span class='line'>$ git cat-file -p def69c2c316574aaf328e546486fa750eb9c53a0
+</span><span class='line'>100644 blob 5bc4b3f69d730535eb3a8aee28d7ef9273225d50    .gitignore
+</span><span class='line'>&hellip;
+</span><span class='line'>040000 tree e1b8ecbb1f19709f3a4867a0ffe08bb2e07acf19    tree
+</span><span class='line'>&lt;code&gt;
+</span><span class='line'>&lt;/code&gt;
+</span><span class='line'>$ git cat-file -p e1b8ecbb1f19709f3a4867a0ffe08bb2e07acf19
+</span><span class='line'>100644 blob 9daeafb9864cf43055ae93beb0afd6c7d144bfa4    file</span></code></pre></td></tr></table></div></figure></p>
 
 <p>其實不難猜，你local commit的東西會被處理後變成object，並且依照hash分門別類地存放。</p>
 
@@ -1026,17 +774,24 @@ Total 5006 (delta 3914), reused 5001 (delta 3913)
 </code></p>
 
 <p>可以看到，剛才的目錄全部消失，而pack目錄的檔案名稱也和前面的不同了。對照上面<code>git gc</code>的訊息，可以知道<code>git gc</code>做了壓縮，並且將這些object一起壓到pack目錄的檔案中了。
-&#8220;`
-$ tree .git/objects/
-.git/objects/
-├── info
-│   └── packs
-└── pack
-    ├── pack-57d163604c430e1919a18e97c5b1312291b62721.idx
-    └── pack-57d163604c430e1919a18e97c5b1312291b62721.pack</p>
-
-<p>2 directories, 3 files
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ tree .git/objects/
+</span><span class='line'>.git/objects/
+</span><span class='line'>├── info
+</span><span class='line'>│   └── packs
+</span><span class='line'>└── pack
+</span><span class='line'>    ├── pack-57d163604c430e1919a18e97c5b1312291b62721.idx
+</span><span class='line'>    └── pack-57d163604c430e1919a18e97c5b1312291b62721.pack&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;2 directories, 3 files</span></code></pre></td></tr></table></div></figure></p>
 
 <p>所以我們可以從觀察中做出結論。Git object的存放有兩種型式</p>
 
@@ -1304,14 +1059,18 @@ src/core/caret.cpp /tmp/6nZQoO_caret.cpp 99fdca2d1d2b90e6452555572d3b0c3cf3ae75b
 7 被更動後檔案權限</p>
 
 <p>對我們來說，有興趣的是2和5，所以我們可以將命令更動為
-&#8220;`
-$ cat ~/bin/git_diff.sh</p>
-
-<h1>!/bin/sh -x</h1>
-
-<p>echo $@
-meld $2 $5
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ cat ~/bin/git_diff.sh&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;h1&gt;!/bin/sh -x&lt;/h1&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;echo $@
+</span><span class='line'>meld $2 $5</span></code></pre></td></tr></table></div></figure></p>
 
 <p>meld是一個GUI程式的比對工具。接下來就來測試吧</p>
 
@@ -1457,27 +1216,44 @@ From /tmp/remote_repo2
 </code></p>
 
 <p>然後建立一個branch，對應到repo2的master
-&#8220;`
-$ git checkout -b local_repo2 repo2/master
-Branch local_repo2 set up to track remote branch master from repo2.
-Switched to a new branch &lsquo;local_repo2&rsquo;</p>
-
-<p>$ git branch -a
-* local_repo2
-  master
-  remotes/origin/HEAD -> origin/master
-  remotes/origin/master
-  remotes/repo2/master</p>
-
-<p>$ git diff master
-diff &ndash;git a/myfile b/myfile
-index 464d9cd..27d38ae 100644
- a/myfile
-+++ b/myfile
-@@ -1 +1 @@
--repo1
-+repo2
-&#8220;`</p>
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>$ git checkout -b local_repo2 repo2/master
+</span><span class='line'>Branch local_repo2 set up to track remote branch master from repo2.
+</span><span class='line'>Switched to a new branch &lsquo;local_repo2&rsquo;&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ git branch -a
+</span><span class='line'>* local_repo2
+</span><span class='line'>  master
+</span><span class='line'>  remotes/origin/HEAD -&gt; origin/master
+</span><span class='line'>  remotes/origin/master
+</span><span class='line'>  remotes/repo2/master&lt;/p&gt;
+</span><span class='line'>
+</span><span class='line'>&lt;p&gt;$ git diff master
+</span><span class='line'>diff &ndash;git a/myfile b/myfile
+</span><span class='line'>index 464d9cd..27d38ae 100644
+</span><span class='line'> a/myfile
+</span><span class='line'>+++ b/myfile
+</span><span class='line'>@@ -1 +1 @@
+</span><span class='line'>-repo1
+</span><span class='line'>+repo2</span></code></pre></td></tr></table></div></figure></p>
 
 <p><a name="g2_rt_merge"></a></p>
 
@@ -1587,6 +1363,68 @@ To choose either option permanently, see push.default in 'git help config'.
 <p> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/zzz00072/a-successful-git-branching-model-43382196" title="A successful git branching model 導讀" target="_blank">A successful git branching model 導讀</a> </strong> from <strong><a href="//www.slideshare.net/zzz00072" target="_blank">Wen Liao</a></strong> </div></p>
 
 <script async class="speakerdeck-embed" data-id="c2525af07afb01328ff846860cd29960" data-ratio="1.33333333333333" src="//speakerdeck.com/assets/embed.js"></script>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[筆記: [OpenStack] GIT Commit Good Practice]]></title>
+    <link href="http://wen00072.github.io/blog/2013/09/08/note-openstackgit-commit-good-practice/"/>
+    <updated>2013-09-08T12:00:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2013/09/08/note-openstackgit-commit-good-practice</id>
+    <content type="html"><![CDATA[<p><a href="https://wiki.openstack.org/wiki/GitCommitMessages">出處：[OpenStack] GIT Commit Good Practice</a></p>
+
+<ul>
+<li>大部份的程式碼是被閱讀的次數遠大於更動的次數，因此可讀性很重要。</li>
+</ul>
+
+
+<h2>如何結構化地切割變動？</h2>
+
+<ul>
+<li>原則：每次的commit應該只包含一個邏輯上的變動</li>
+</ul>
+
+
+<h3>commit時該避免的事</h3>
+
+<ul>
+<li>commit的部份把空白字元更動(如空白從8個換成4個、TAB換成空白字元)和程式變動混在一起</li>
+<li>把和commit宣稱要改新功能無關的程式碼一起commit進去</li>
+<li>一次commit 大量的程式碼</li>
+</ul>
+
+
+<h2>關於Commit訊息</h2>
+
+<ul>
+<li>不要假設審查者會瞭解該commit原本要處理的問題，所以不要忘記留下關於你要修掉的問題的描述和資訊，省去審查者自行查找的時間</li>
+<li>由於git的特性，審查者不一定只在電腦可以連上網路時審查您的commit。因此請將在commit留下足夠的訊息而不是要求別人去連到某個外部連結去參考資料</li>
+<li>不要自以為程式碼明顯易懂就在commit訊息偷懶省略資料。提供問題描述、解決方式和更動會比較週全</li>
+<li>請描述更動程式碼的理由和目的</li>
+<li>如果您的commit訊息需要長篇大論的說明時，也許是個好時機去分拆commit成更細小的commit</li>
+<li>如果很不幸地必須要commit大量的程式碼，請務必在commit 訊息中提供資訊讓審查者便於審查這大堆頭的程式碼</li>
+<li>commit訊息的第1行非常重要。可以用在email的標題、log viewer的提示等。請想辦法在一行的長度讓閱讀log的人瞭解你commit了什麼資訊</li>
+<li>如果程式碼有已知錯誤、Todos、或是limitation也記得一併寫在commit訊息中</li>
+</ul>
+
+
+<h2>OpenStack 使用的commit 訊息格式</h2>
+
+<ul>
+<li>第1行簡略描述該commit更動的內容，字數小於50字元，結尾不得有句點</li>
+<li>第2行單純為跳行符號</li>
+<li>第3行以後開始詳細描述更動的範圍，長度不得超過72字元
+
+<ul>
+<li>描述問題狀況</li>
+<li>對應問題的更動描述，以及更動的理由說明</li>
+<li>提供更動後的結果範例</li>
+<li>Limitation，改善空間等</li>
+</ul>
+</li>
+<li>軟體管理用的辨別ID如Change-id等</li>
+</ul>
 
 ]]></content>
   </entry>
