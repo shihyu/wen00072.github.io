@@ -639,7 +639,7 @@
     <loc>http://wen00072.github.io/blog/categories/ld/</loc>
   </url>
   <url>
-    <loc>http://wen00072.github.io/blog/categories/bintuils/</loc>
+    <loc>http://wen00072.github.io/blog/categories/binutils/</loc>
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/inline/</loc>
@@ -702,9 +702,6 @@
     <loc>http://wen00072.github.io/blog/categories/valgrind/</loc>
   </url>
   <url>
-    <loc>http://wen00072.github.io/blog/categories/binutils/</loc>
-  </url>
-  <url>
     <loc>http://wen00072.github.io/blog/categories/rtenv/</loc>
   </url>
   <url>
@@ -718,9 +715,6 @@
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/qemu/</loc>
-  </url>
-  <url>
-    <loc>http://wen00072.github.io/blog/categories/binutil/</loc>
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/virtualbox/</loc>
@@ -762,9 +756,6 @@
     <loc>http://wen00072.github.io/blog/categories/gnu-as/</loc>
   </url>
   <url>
-    <loc>http://wen00072.github.io/blog/categories/javadoc/</loc>
-  </url>
-  <url>
     <loc>http://wen00072.github.io/blog/categories/osm/</loc>
   </url>
   <url>
@@ -789,13 +780,10 @@
     <loc>http://wen00072.github.io/blog/categories/asm/</loc>
   </url>
   <url>
-    <loc>http://wen00072.github.io/blog/categories/got/</loc>
+    <loc>http://wen00072.github.io/blog/categories/git-remote/</loc>
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/stm32/</loc>
-  </url>
-  <url>
-    <loc>http://wen00072.github.io/blog/categories/shell-script/</loc>
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/semihosting/</loc>

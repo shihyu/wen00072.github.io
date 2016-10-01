@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: Got | My code works, I don't know why.]]></title>
-  <link href="http://wen00072.github.io/blog/categories/got/atom.xml" rel="self"/>
+  <title><![CDATA[Category: Git Remote | My code works, I don't know why.]]></title>
+  <link href="http://wen00072.github.io/blog/categories/git-remote/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-10-01T21:04:04+08:00</updated>
+  <updated>2016-10-01T21:32:41+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -14,7 +14,7 @@
 
   
   <entry>
-    <title type="html"><![CDATA[談談 Git Remote]]></title>
+    <title type="html"><![CDATA[再談 Git Remote]]></title>
     <link href="http://wen00072.github.io/blog/2016/01/24/talk-about-git-remote/"/>
     <updated>2016-01-24T20:30:32+08:00</updated>
     <id>http://wen00072.github.io/blog/2016/01/24/talk-about-git-remote</id>
@@ -234,98 +234,57 @@ upstream    /tmp/test_remote/repo_1/ (push)
 
 
 <p>我們先在<code>repo_1</code>開一個branch稱為<code>br1</code>
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ cd /tmp/test_remote/repo_1/&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ git checkout -b br1
-</span><span class='line'>Switched to a new branch &lsquo;br1&rsquo;&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ touch test_on_branch &amp;&amp; git add test_on_branch &amp;&amp; git commit test_on_branch -m &ldquo;test&rdquo;
-</span><span class='line'>[br1 cc7222f] test
-</span><span class='line'> 1 file changed, 0 insertions(+), 0 deletions(-)
-</span><span class='line'> create mode 100644 test_on_branch</span></code></pre></td></tr></table></div></figure></p>
+&#8220;`
+$ cd /tmp/test_remote/repo_1/</p>
+
+<p>$ git checkout -b br1
+Switched to a new branch &lsquo;br1&rsquo;</p>
+
+<p>$ touch test_on_branch &amp;&amp; git add test_on_branch &amp;&amp; git commit test_on_branch -m &ldquo;test&rdquo;
+[br1 cc7222f] test
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 test_on_branch
+&#8220;`</p>
 
 <p>接下來就是範例時間
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ git fetch upstream
-</span><span class='line'>From /tmp/test_remote/repo_1
-</span><span class='line'> * [new branch]      br1        -&gt; upstream/br1
-</span><span class='line'> * [new branch]      master     -&gt; upstream/master&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ ls
-</span><span class='line'>test_file&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ git pull upstream br1
-</span><span class='line'>From /tmp/test_remote/repo_1
-</span><span class='line'> * branch            br1        -&gt; FETCH_HEAD
-</span><span class='line'>Updating 6847c3c..cc7222f
-</span><span class='line'>Fast-forward
-</span><span class='line'> test_on_branch | 0
-</span><span class='line'> 1 file changed, 0 insertions(+), 0 deletions(-)
-</span><span class='line'> create mode 100644 test_on_branch&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ ls
-</span><span class='line'>test_file  test_on_branch&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;$ git status
-</span><span class='line'>On branch master
-</span><span class='line'>Your branch is ahead of &lsquo;origin/master&rsquo; by 1 commit.
-</span><span class='line'>  (use &ldquo;git push&rdquo; to publish your local commits)
-</span><span class='line'>nothing to commit, working directory clean
-</span><span class='line'>&lt;code&gt;``
-</span><span class='line'>注意最後的指令，因為我們pull了&lt;/code&gt;upstream/br1&lt;code&gt;，所以local多了一個commit。因此訊息中有說你目前repository 比&lt;/code&gt;origin/master&lt;code&gt;(你clone的remote/branch)多一個commit。你可以push回&lt;/code&gt;origin/master`。&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;&lt;a name="gr_cmd_push"&gt;&lt;/a&gt;&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;h2&gt;remote的branch操作&lt;/h2&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;p&gt;原則就是命令中有參數會是&lt;code&gt;remote_名稱&lt;/code&gt;、&lt;code&gt;remote_名稱 remote_branch_名稱&lt;/code&gt;或&lt;code&gt;remote_名稱/remote_branch_名稱&lt;/code&gt;。&lt;/p&gt;
-</span><span class='line'>
-</span><span class='line'>&lt;ul&gt;
-</span><span class='line'>&lt;li&gt;切換</span></code></pre></td></tr></table></div></figure>
+&#8220;`
+$ git fetch upstream
+From /tmp/test_remote/repo_1
+ * [new branch]      br1        -> upstream/br1
+ * [new branch]      master     -> upstream/master</p>
+
+<p>$ ls
+test_file</p>
+
+<p>$ git pull upstream br1
+From /tmp/test_remote/repo_1
+ * branch            br1        -> FETCH_HEAD
+Updating 6847c3c..cc7222f
+Fast-forward
+ test_on_branch | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 test_on_branch</p>
+
+<p>$ ls
+test_file  test_on_branch</p>
+
+<p>$ git status
+On branch master
+Your branch is ahead of &lsquo;origin/master&rsquo; by 1 commit.
+  (use &ldquo;git push&rdquo; to publish your local commits)
+nothing to commit, working directory clean
+<code>``
+注意最後的指令，因為我們pull了</code>upstream/br1<code>，所以local多了一個commit。因此訊息中有說你目前repository 比</code>origin/master<code>(你clone的remote/branch)多一個commit。你可以push回</code>origin/master`。</p>
+
+<p><a name="gr_cmd_push"></a></p>
+
+<h2>remote的branch操作</h2>
+
+<p>原則就是命令中有參數會是<code>remote_名稱</code>、<code>remote_名稱 remote_branch_名稱</code>或<code>remote_名稱/remote_branch_名稱</code>。</p>
+
+<ul>
+<li>切換
+&#8220;`
 $ git checkout upstream/br1
 Note: checking out &lsquo;upstream/br1&rsquo;.</li>
 </ul>
