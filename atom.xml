@@ -4,7 +4,7 @@
   <title><![CDATA[My code works, I don't know why.]]></title>
   <link href="http://wen00072.github.io/atom.xml" rel="self"/>
   <link href="http://wen00072.github.io/"/>
-  <updated>2016-10-01T23:24:21+08:00</updated>
+  <updated>2016-10-03T16:38:07+08:00</updated>
   <id>http://wen00072.github.io/</id>
   <author>
     <name><![CDATA[Wen Liao]]></name>
@@ -12,6 +12,548 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[使用gdb 靜態分析C 語言名稱和參數相同函數的原始檔位置]]></title>
+    <link href="http://wen00072.github.io/blog/2016/10/03/locate-function-source-code-via-gdb/"/>
+    <updated>2016-10-03T14:36:00+08:00</updated>
+    <id>http://wen00072.github.io/blog/2016/10/03/locate-function-source-code-via-gdb</id>
+    <content type="html"><![CDATA[<h2>前言</h2>
+
+<p>感謝<a href="http://scottt.tw/">Scott</a>大大的資訊。</p>
+
+<p>忘記那邊看過的名言：「手上有了新玩具，就會想要馬上拿來用。」</p>
+
+<h2>動機</h2>
+
+<p>組裝軟體的時候，有一件事很讓我困擾。那就是當整包SDK有兩個以上名稱和參數相同的函數的時候。當這種情況發生時，trace code就很麻煩，你必須要花時間釐清到底最後會使用到那一個函數。而這些config可能用下面兩種方式切換這些名稱和參數相同的函數：</p>
+
+<ol>
+<li>巨集
+
+<ul>
+<li><code>#if</code></li>
+<li><code>#ifdef</code></li>
+</ul>
+</li>
+<li>Makefile
+
+<ul>
+<li>在檔案中根據不同變數編譯不同的檔案</li>
+</ul>
+</li>
+</ol>
+
+
+<p>我以前會視情況用下面兩種方法找到該函數編譯實際使用的原始檔位置</p>
+
+<ol>
+<li>下毒藥，只要相同名字的函數都塞入<code>#error 可以辨別的字串</code>。編譯時根據錯誤訊息判斷使用哪個函數</li>
+<li>gdb設斷點，runtime透過中斷函數的方式取得函數的檔案和行號</li>
+</ol>
+
+
+<p>不過<a href="http://scottt.tw/">Scott</a>大大的今天給的資訊讓我可以更省力的處理這個問題了。</p>
+
+<p>如果只想要知道用法，看完下面指令就可以收工回家了。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='sh'><span class='line'>gdb -ex <span class="s1">&#39;file 你的執行檔或是shared library檔&#39;</span> -ex <span class="s1">&#39;info line 要查的函數&#39;</span> -ex <span class="s1">&#39;quit&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>當然用<code>gdb</code>編譯時不要忘記加debug option。</p>
+
+<h2>目錄</h2>
+
+<ul>
+<li><a href="#gds_env">測試環境</a></li>
+<li><a href="#gds_files">測試檔案</a>
+
+<ul>
+<li><a href="#gds_files_1">test_same_func.c</a></li>
+<li><a href="#gds_files_2">same_func1.c</a></li>
+<li><a href="#gds_files_3">same_func2.c</a></li>
+<li><a href="#gds_files_mk">Makefile</a></li>
+</ul>
+</li>
+<li><a href="#gds_test">測試結果</a></li>
+<li><a href="#gds_ref">延伸資料</a></li>
+</ul>
+
+
+<p><a name="gds_env"></a></p>
+
+<h2>測試環境</h2>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='text'><span class='line'>$ lsb_release -a
+</span><span class='line'>No LSB modules are available.
+</span><span class='line'>Distributor ID:   Ubuntu
+</span><span class='line'>Description:  Ubuntu 14.04.5 LTS
+</span><span class='line'>Release:  14.04
+</span><span class='line'>Codename: trusty
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="gds_files"></a></p>
+
+<h2>測試檔案</h2>
+
+<p>簡單來說，就是實作切換兩種方式同樣名稱和參數的函數：</p>
+
+<ol>
+<li>巨集</li>
+<li>Makefile</li>
+</ol>
+
+
+<p>所以我們會有</p>
+
+<ol>
+<li><a href="#gds_files_1">測試檔案進入點</a></li>
+<li><a href="#gds_files_2">測試檔一</a>
+
+<ul>
+<li>實作使用巨集<code>OP1</code>切換同樣名稱和參數</li>
+<li>和測試檔二完全一模一樣</li>
+</ul>
+</li>
+<li><a href="#gds_files_3">測試檔二</a>
+
+<ul>
+<li>實作使用巨集<code>OP1</code>切換同樣名稱和參數</li>
+<li>和測試檔一完全一模一樣</li>
+</ul>
+</li>
+<li><a href="#gds_files_mk">Makefile</a>
+
+<ul>
+<li>除了編譯以外，還提供兩個變數，由command line傳入
+
+<ul>
+<li>USE_FILE=1
+
+<ul>
+<li>沒傳入時預設編譯<font color="red"><strong>測試檔二</strong></font>，當該參數傳入<code>USE_FILE=1</code>時會變成編譯<font color="red"><strong>測試檔一</strong></font></li>
+</ul>
+</li>
+<li>EN_OP1=1
+
+<ul>
+<li>當該參數傳入時才會開啟<code>OP1</code>巨集</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+
+
+<p><a name="gds_files_1"></a></p>
+
+<h3>test_same_func.c</h3>
+
+<ul>
+<li>測試檔案進入點，呼叫func1()。func1()在compile time才被決定</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>test_same_func.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'><span class="k">extern</span> <span class="kt">void</span> <span class="nf">func1</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;Hello World</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="n">func1</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="gds_files_2"></a></p>
+
+<h3>same_func1.c</h3>
+
+<ul>
+<li>實作使用巨集<code>OP1</code>切換同樣名稱和參數</li>
+<li>和<a href="#gds_files_2">same_func2</a>完全一模一樣</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>same_func1.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#if OP1</span>
+</span><span class='line'><span class="kt">void</span> <span class="nf">func1</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s: %s_OP1</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="cp">#else</span>
+</span><span class='line'><span class="kt">void</span> <span class="nf">func1</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s: %s_NOT_OP1</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="gds_files_3"></a></p>
+
+<h3>same_func2.c</h3>
+
+<ul>
+<li>實作使用巨集<code>OP1</code>切換同樣名稱和參數</li>
+<li>和<a href="#gds_files_1">same_func1</a>完全一模一樣</li>
+</ul>
+
+
+<figure class='code'><figcaption><span>same_func2.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#include &lt;stdio.h&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">#if OP1</span>
+</span><span class='line'><span class="kt">void</span> <span class="nf">func1</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s: %s_OP1</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="cp">#else</span>
+</span><span class='line'><span class="kt">void</span> <span class="nf">func1</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;%s: %s_NOT_OP1</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">__FILE__</span><span class="p">,</span> <span class="n">__PRETTY_FUNCTION__</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="cp">#endif</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="gds_files_mk"></a></p>
+
+<h3>Makefile</h3>
+
+<p>提供兩個變數，由command line傳入</p>
+
+<ul>
+<li>USE_FILE=1
+
+<ul>
+<li>沒傳入時預設編譯<font color="red"><strong>測試檔二</strong></font>，當該參數傳入<code>USE_FILE=1</code>時會變成編譯<font color="red"><strong>測試檔一</strong></font></li>
+</ul>
+</li>
+<li>EN_OP1=1
+
+<ul>
+<li>當該參數傳入時才會開啟<code>OP1</code>巨集</li>
+</ul>
+</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">CFLAGS</span><span class="o">+=</span>-Wall -Werror -g3
+</span><span class='line'><span class="nv">TARGET</span><span class="o">=</span>test_same_func
+</span><span class='line'><span class="nv">SRCS</span><span class="o">=</span>test_same_func.c
+</span><span class='line'>
+</span><span class='line'><span class="cp">ifeq ($(USE_FILE), 1)</span>
+</span><span class='line'>    SRCS +<span class="o">=</span> same_func1.c
+</span><span class='line'><span class="cp">else</span>
+</span><span class='line'>    SRCS +<span class="o">=</span> same_func2.c
+</span><span class='line'><span class="cp">endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="cp">ifeq ($(EN_OP1), 1)</span>
+</span><span class='line'>    CFLAGS +<span class="o">=</span> -DOP1<span class="o">=</span>1
+</span><span class='line'><span class="cp">endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">OBJS</span><span class="o">=</span><span class="k">$(</span>patsubst %.c, %.o, <span class="k">$(</span>SRCS<span class="k">))</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">$(TARGET)</span><span class="o">:</span> <span class="k">$(</span><span class="nv">OBJS</span><span class="k">)</span>
+</span><span class='line'>  <span class="k">$(</span>CC<span class="k">)</span> -o <span class="nv">$@</span> <span class="nv">$^</span>
+</span><span class='line'>  gdb -ex <span class="s1">&#39;file $@&#39;</span> -ex <span class="s1">&#39;info line func1&#39;</span> -ex <span class="s1">&#39;quit&#39;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">%.o</span><span class="o">:</span> %.<span class="n">c</span>
+</span><span class='line'>  <span class="k">$(</span>CC<span class="k">)</span> <span class="k">$(</span>CFLAGS<span class="k">)</span> -c <span class="nv">$^</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
+</span><span class='line'>  rm *.o *~ <span class="k">$(</span>TARGET<span class="k">)</span> -f
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="gds_test"></a></p>
+
+<h2>測試結果</h2>
+
+<p>前面提過，<code>func1()</code>的實作受兩個變數影響，分別為</p>
+
+<ol>
+<li>巨集<code>OP1</code>是否有設定
+
+<ul>
+<li>只有<code>OP1</code> 被設定<strong>並且</strong>非零時才會進入<code>OP1</code>的<code>func1()</code></li>
+</ul>
+</li>
+<li>Makefile變數<code>USE_FILE</code>是否有設定
+
+<ul>
+<li>只有<code>USE_FILE</code>為1的時候才會使用<code>same_func1.c</code>，其他情形都編譯<code>same_func2.c</code></li>
+</ul>
+</li>
+</ol>
+
+
+<p>所以我們make 指令有下面四種變化</p>
+
+<ol>
+<li><a href="">巨集<code>OP1</code>和<code>USE_FILE</code>都沒設定</a></li>
+<li><a href="">設定巨集<code>OP1</code>，<code>USE_FILE</code>沒設定</a></li>
+<li><a href="">巨集<code>OP1</code>沒設定，但是設定<code>USE_FILE</code></a></li>
+<li><a href="">全部設定巨集<code>OP1</code>和<code>USE_FILE</code></a></li>
+</ol>
+
+
+<p><a name=""></a></p>
+
+<h3>巨集<code>OP1</code>和<code>USE_FILE</code>都沒設定</h3>
+
+<p>gdb驗證結果的確是</p>
+
+<ol>
+<li>編譯<code>same_func2.c</code></li>
+<li>使用非<code>OP1</code>版本的<code>func1()</code></li>
+</ol>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='sh'><span class='line'><span class="nv">$ </span>make clean
+</span><span class='line'>default settings: OP1 disable and use same_func1.c
+</span><span class='line'>rm *.o *~ test_same_func -f
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>make
+</span><span class='line'>cc -Wall -Werror -g3 -c test_same_func.c
+</span><span class='line'>cc -Wall -Werror -g3 -c same_func2.c
+</span><span class='line'>cc -o test_same_func test_same_func.o same_func2.o
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>gdb -ex <span class="s1">&#39;file test_same_func&#39;</span> -ex <span class="s1">&#39;info line func1&#39;</span> -ex <span class="s1">&#39;quit&#39;</span>
+</span><span class='line'>...
+</span><span class='line'>Line <span class="m">11</span> of <span class="s2">&quot;same_func2.c&quot;</span> starts at address 0x400597 &lt;func1&gt; and ends at 0x40059b &lt;func1+4&gt;.
+</span><span class='line'>Hello World
+</span><span class='line'>same_func2.c: func1_NOT_OP1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name=""></a></p>
+
+<h3>設定巨集<code>OP1</code>，<code>USE_FILE</code>沒設定</h3>
+
+<p>gdb驗證結果的確是</p>
+
+<ol>
+<li>編譯<code>same_func2.c</code></li>
+<li>使用<code>OP1</code>版本的<code>func1()</code></li>
+</ol>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='sh'><span class='line'><span class="nv">$ </span>make clean
+</span><span class='line'>rm *.o *~ test_same_func -f
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>make <span class="nv">EN_OP1</span><span class="o">=</span>1
+</span><span class='line'>cc -Wall -Werror -g3 -DOP1<span class="o">=</span><span class="m">1</span> -c test_same_func.c
+</span><span class='line'>cc -Wall -Werror -g3 -DOP1<span class="o">=</span><span class="m">1</span> -c same_func2.c
+</span><span class='line'>cc -o test_same_func test_same_func.o same_func2.o
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>gdb -ex <span class="s1">&#39;file test_same_func&#39;</span> -ex <span class="s1">&#39;info line func1&#39;</span> -ex <span class="s1">&#39;quit&#39;</span>
+</span><span class='line'>...
+</span><span class='line'>Line <span class="m">5</span> of <span class="s2">&quot;same_func2.c&quot;</span> starts at address 0x400597 &lt;func1&gt; and ends at 0x40059b &lt;func1+4&gt;.
+</span><span class='line'>Hello World
+</span><span class='line'>same_func2.c: func1_OP1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name=""></a></p>
+
+<h3>巨集<code>OP1</code>沒設定，但是設定<code>USE_FILE</code></h3>
+
+<p>gdb驗證結果的確是</p>
+
+<ol>
+<li>編譯<code>same_func1.c</code></li>
+<li>使用非<code>OP1</code>版本的<code>func1()</code></li>
+</ol>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='sh'><span class='line'><span class="nv">$ </span>make clean
+</span><span class='line'>rm *.o *~ test_same_func -f
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>make <span class="nv">USE_FILE</span><span class="o">=</span>1
+</span><span class='line'>cc -Wall -Werror -g3 -c test_same_func.c
+</span><span class='line'>cc -Wall -Werror -g3 -c same_func1.c
+</span><span class='line'>cc -o test_same_func test_same_func.o same_func1.o
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>gdb -ex <span class="s1">&#39;file test_same_func&#39;</span> -ex <span class="s1">&#39;info line func1&#39;</span> -ex <span class="s1">&#39;quit&#39;</span>
+</span><span class='line'>...
+</span><span class='line'>Line <span class="m">11</span> of <span class="s2">&quot;same_func1.c&quot;</span> starts at address 0x400597 &lt;func1&gt; and ends at 0x40059b &lt;func1+4&gt;.
+</span><span class='line'>Hello World
+</span><span class='line'>same_func1.c: func1_NOT_OP1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name=""></a></p>
+
+<h3>全部設定巨集<code>OP1</code>和<code>USE_FILE</code></h3>
+
+<p>gdb驗證結果的確是</p>
+
+<ol>
+<li>編譯<code>same_func1.c</code></li>
+<li>使用<code>OP1</code>版本的<code>func1()</code></li>
+</ol>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class='sh'><span class='line'><span class="nv">$ </span>make clean
+</span><span class='line'>rm *.o *~ test_same_func -f
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>make <span class="nv">EN_OP1</span><span class="o">=</span><span class="m">1</span> <span class="nv">USE_FILE</span><span class="o">=</span>1
+</span><span class='line'>cc -Wall -Werror -g3 -DOP1<span class="o">=</span><span class="m">1</span> -c test_same_func.c
+</span><span class='line'>cc -Wall -Werror -g3 -DOP1<span class="o">=</span><span class="m">1</span> -c same_func1.c
+</span><span class='line'>cc -o test_same_func test_same_func.o same_func1.o
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>gdb -ex <span class="s1">&#39;file test_same_func&#39;</span> -ex <span class="s1">&#39;info line func1&#39;</span> -ex <span class="s1">&#39;quit&#39;</span>
+</span><span class='line'>...
+</span><span class='line'>Line <span class="m">5</span> of <span class="s2">&quot;same_func1.c&quot;</span> starts at address 0x400597 &lt;func1&gt; and ends at 0x40059b &lt;func1+4&gt;.
+</span><span class='line'>Hello World
+</span><span class='line'>same_func1.c: func1_OP1
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><a name="gds_ref"></a></p>
+
+<h2>延伸資料</h2>
+
+<ul>
+<li><a href="https://docs.google.com/document/d/1w1nPmCLpeRN3kEYglzHwozhWXY0ddT9oe6JCZocsPNE/edit">Using GDB to Help You Read Linux Kernel Code without Running It</a>
+
+<ul>
+<li><a href="http://scottt.tw/">Scott</a>大大的文件，描述使用gdb 靜態分析Linux kernel的技巧</li>
+</ul>
+</li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Linux Kernel Pratice 0: Buildroot (2/2) - 自行編譯kernel]]></title>
@@ -7308,693 +7850,6 @@ Codename:   trusty
 <p> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/zzz00072/ss-52900264" title="開放街圖 自助旅行的好幫手" target="_blank">開放街圖 自助旅行的好幫手</a> </strong> from <strong><a href="//www.slideshare.net/zzz00072" target="_blank">Wen Liao</a></strong> </div></p>
 
 <script async class="speakerdeck-embed" data-id="8d6935b9c3014b949c05effa288d4a7b" data-ratio="1.33333333333333" src="//speakerdeck.com/assets/embed.js"></script>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[註解中使用Javadoc Tag並將其轉成pdf 說明文件]]></title>
-    <link href="http://wen00072.github.io/blog/2015/08/30/zhu-jie-zhong-shi-yong-javadoc-tag/"/>
-    <updated>2015-08-30T14:02:01+08:00</updated>
-    <id>http://wen00072.github.io/blog/2015/08/30/zhu-jie-zhong-shi-yong-javadoc-tag</id>
-    <content type="html"><![CDATA[<h2>目錄</h2>
-
-<ul>
-<li><a href="#jdoc-preface">前言</a></li>
-<li><a href="#jdoc-example">測試環境和程式</a></li>
-<li><a href="#jdoc-comments">javadoc 專用註解</a>
-
-<ul>
-<li><a href="#jdoc-comments-tags">javadoc 專用註解tag節錄</a></li>
-<li><a href="#jdoc-comments-ex">套用 javadoc 範例</a></li>
-</ul>
-</li>
-<li><a href="#jdoc-ref">參考資料</a></li>
-</ul>
-
-
-<p><a name="jdoc-preface"></a></p>
-
-<h2>前言</h2>
-
-<p><a href="http://www.oracle.com/technetwork/articles/java/index-jsp-135444.html">javadoc</a> 是一套java程式碼文件產工具。它透過在程式碼註解置入javadoc專用的tag，讓自動產出的文件內容提供更詳細的資訊和美觀的呈現方式。這邊整理資訊如下</p>
-
-<p>在開始加入前，我們可以想一下你要看SDK文件會想看什麼，我自己會想到</p>
-
-<ul>
-<li>方塊圖/元件簡介</li>
-<li>函數詳細說明如
-
-<ul>
-<li>函數名稱</li>
-<li>函數功用</li>
-<li>函數參數說明</li>
-<li>函數回傳值</li>
-<li>函數使用注意事項</li>
-<li>和函數功能相關的其他函數。比如說看到<code>play</code>你會想看<code>open</code>、<code>pause</code>、<code>stop</code>、<code>seek</code>等。</li>
-</ul>
-</li>
-</ul>
-
-
-<p>接下來看看我查到的javadoc工具能夠幫我們做到那邊吧？</p>
-
-<p>註：時間和能力有限，有些功能也許沒找到是因為自己沒看到而不代表javadoc辦不到，請讀者自行斟酌。</p>
-
-<p><a name="jdoc-example"></a></p>
-
-<h2>測試環境和程式</h2>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ lsb_release -a
-</span><span class='line'>No LSB modules are available.
-</span><span class='line'>Distributor ID:   Ubuntu
-</span><span class='line'>Description:  Ubuntu 14.04.3 LTS
-</span><span class='line'>Release:  14.04
-</span><span class='line'>Codename: trusty</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>檔案和目錄結構</h3>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>$ tree
-</span><span class='line'>.
-</span><span class='line'>├── com
-</span><span class='line'>│   └── test
-</span><span class='line'>│       └── test.java
-</span><span class='line'>├── config.properties
-</span><span class='line'>├── Makefile
-</span><span class='line'>└── pdfdoclet-1.0.3
-</span><span class='line'>    ├── build.xml
-</span><span class='line'>       ....
-</span><span class='line'>    └── jar
-</span><span class='line'>        └── pdfdoclet-1.0.3-all.jar</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Makefile</h3>
-
-<p>就單純編譯一個java檔，以及對應的pdf文件，並使用Ubuntu 上面預設的pdf閱讀程式開啟之。pdf文件使用<a href="http://pdfdoclet.sourceforge.net/">pdfdoclet</a>產生。該套件需自行下載，我將下載的pdfdoclet解壓縮到測試程式同一層目錄中。</p>
-
-<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">SRC_PATH</span><span class="o">=</span>com/test
-</span><span class='line'><span class="nv">TARGET</span><span class="o">=</span><span class="k">$(</span>SRC_PATH<span class="k">)</span>/test
-</span><span class='line'><span class="nv">SRC_FILE</span><span class="o">=</span><span class="k">$(</span>addsuffix .java, <span class="k">$(</span>TARGET<span class="k">))</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">$(TARGET)</span><span class="o">:</span> <span class="k">$(</span><span class="nv">SRC_FILE</span><span class="k">)</span>
-</span><span class='line'>  javac <span class="nv">$^</span>
-</span><span class='line'>  javadoc -docletpath pdfdoclet-1.0.3/jar/pdfdoclet-1.0.3-all.jar <span class="se">\</span>
-</span><span class='line'>            -doclet com.tarsec.javadoc.pdfdoclet.PDFDoclet <span class="nv">$^</span> -verbose <span class="se">\</span>
-</span><span class='line'>            -pdf <span class="nv">$@</span>.pdf -config config.properties
-</span><span class='line'>  evince <span class="k">$(</span>TARGET<span class="k">)</span>.pdf
-</span><span class='line'>
-</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
-</span><span class='line'>  rm -rf <span class="k">$(</span>SRC_PATH<span class="k">)</span>/*.class <span class="k">$(</span>TARGET<span class="k">)</span>.pdf
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p></p>
-
-<h3>pdfdoclet config檔案</h3>
-
-<figure class='code'><figcaption><span>config.properties</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'># Prints @author tags if set to &quot;yes&quot;.
-</span><span class='line'>tag.author=yes
-</span><span class='line'>
-</span><span class='line'># Prints @version tags if set to &quot;yes&quot;.
-</span><span class='line'>tag.version=yes
-</span><span class='line'>
-</span><span class='line'># Prints @since tags if set to &quot;yes&quot;.
-</span><span class='line'>tag.since=yes
-</span><span class='line'>
-</span><span class='line'># Show the Summary Tables if set to &quot;yes&quot;.
-</span><span class='line'>summary.table=yes
-</span><span class='line'>
-</span><span class='line'># Encrypts the document if set to &quot;yes&quot;.
-</span><span class='line'>encrypted=yes
-</span><span class='line'>
-</span><span class='line'># The following property is ignored
-</span><span class='line'># if &quot;encrypted&quot; is not set to yes.
-</span><span class='line'>allow.printing=yes
-</span><span class='line'>
-</span><span class='line'># Creates hyperlinks if set to &quot;yes&quot;.
-</span><span class='line'># For print documents, use &quot;no&quot;, so
-</span><span class='line'># there will be no underscores.
-</span><span class='line'>create.links=yes
-</span><span class='line'>
-</span><span class='line'># Creates an alphabetical index of all
-</span><span class='line'># classes and members at the end of the
-</span><span class='line'># document if set to &quot;yes&quot;.
-</span><span class='line'>create.index=yes
-</span><span class='line'>
-</span><span class='line'># Creates a navigation frame (or PDF
-</span><span class='line'># outline tree) if set to &quot;yes&quot;.
-</span><span class='line'>create.frame=yes
-</span><span class='line'>
-</span><span class='line'># Creates a title page at the beginning
-</span><span class='line'># of the document if set to &quot;yes&quot;.
-</span><span class='line'>api.title.page=yes
-</span><span class='line'>
-</span><span class='line'># Defines the title on the title page if
-</span><span class='line'># no external HTML page is used.
-</span><span class='line'>api.title=Test pdfdoeclet
-</span><span class='line'>
-</span><span class='line'># Defines the author text on the
-</span><span class='line'># title page.
-</span><span class='line'>api.author=by Wen Liao
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>測試原始碼</h3>
-
-<p>印出九九乘法表，我不會Java，更不會OO。這個程式示範了在class中呼叫另外一個class method。如果有人有發現寫不好的請指正，感恩！</p>
-
-<figure class='code'><figcaption><span>com/test/test.java</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">package</span> <span class="n">com</span><span class="o">.</span><span class="na">test</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">test</span> <span class="o">{</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">class</span> <span class="nc">mul</span> <span class="o">{</span>
-</span><span class='line'>        <span class="kd">public</span> <span class="kt">int</span> <span class="nf">multiply</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">,</span> <span class="kt">int</span> <span class="n">j</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>            <span class="k">return</span> <span class="n">i</span> <span class="o">*</span> <span class="n">j</span><span class="o">;</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">MAX_NUM</span> <span class="o">=</span> <span class="mi">9</span><span class="o">;</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">test</span> <span class="n">my_test</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">test</span><span class="o">();</span>
-</span><span class='line'>        <span class="n">my_test</span><span class="o">.</span><span class="na">hello</span><span class="o">();</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">private</span> <span class="kt">void</span> <span class="nf">hello</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">mul</span> <span class="n">my_mul</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">mul</span><span class="o">();</span>
-</span><span class='line'>        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">MAX_NUM</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-</span><span class='line'>            <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="o">;</span> <span class="n">j</span> <span class="o">&lt;=</span> <span class="n">MAX_NUM</span><span class="o">;</span> <span class="n">j</span><span class="o">++)</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">i</span> <span class="o">+</span> <span class="s">&quot; x &quot;</span> <span class="o">+</span> <span class="n">j</span> <span class="o">+</span> <span class="s">&quot; = &quot;</span> <span class="o">+</span> <span class="n">my_mul</span><span class="o">.</span><span class="na">multiply</span><span class="o">(</span><span class="n">i</span><span class="o">,</span> <span class="n">j</span><span class="o">));</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a name="jdoc-comments"></a></p>
-
-<h2>javadoc 專用註解說明</h2>
-
-<p>還沒加入javadoc註解的pdf檔<a href="http://wen00072.github.io/files/javadoc-20150830/test_init.pdf">如link，應該沒病毒吧?</a>。接下來讓我們開始吧。</p>
-
-<p>要引入javadoc的註解，要加入javadoc的註解專用格式如下。</p>
-
-<figure class='code'><figcaption><span>javadoc註解</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
-</span><span class='line'><span class="cm">* 兩個星號開頭的註解，這行的第一個*可以省略</span>
-</span><span class='line'><span class="cm">*/</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>在介紹tag前，從參考資料中整理了一些注意事項</p>
-
-<ol>
-<li>一個javadoc 註解可以大概分成兩個部份
-
-<ul>
-<li>主要文字描述部份，描述特定的class, interface, method是做什麼，操作時有哪些需要注意的事項。</li>
-<li>tag section，除了註解開頭的<code>*</code>外，一行以<code>@</code>開頭的javadoc tag註解。所有的主要文字描述<strong>必須</strong>要放在tag section前面。
-
-<ul>
-<li>tag又可以分為
-
-<ul>
-<li>block tag，就是上面講的<code>@</code>放在行首的情形</li>
-<li>inline tag，以<code>{@java_tag_名稱 參數}</code>表示</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-<li>第一個<code>@</code>符號出現在單行最開頭之前的所有註解，視為該註解往下最接近的method說明。</li>
-<li>註解中兩個段落以<code>&lt;p&gt;</code>間隔。</li>
-<li>javadoc註解的開頭使用簡潔的語句描述下面實體如class/method等。想像成git commit log第一行對於git log的重要性。</li>
-<li>註解中可以插入HTML語法，包括<code>&lt;a href...&gt;</code>、<code>&lt;img src=...&gt;</code>和<code>&lt;pre&gt;...&lt;/pre&gt;</code>。因為這樣，要顯示<code>&lt;</code>，<code>&amp;</code>之類字元的要使用<a href="http://www.w3schools.com/html/html_entities.asp">HTML Entities</a>如<code>&amp;amp</code>。</li>
-<li>javadoc註解文件分類
-
-<ul>
-<li>doc 文件，在class, interface, method等宣告前的註解，用來解釋該class、interface等。</li>
-<li>overview 文件，整個產出文件的簡介說明。</li>
-<li>package 文件，單個package的簡介文件。</li>
-</ul>
-</li>
-</ol>
-
-
-<p>以下是典型的javadoc 註解範例</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
-</span><span class='line'><span class="cm">* 說明你的method</span>
-</span><span class='line'><span class="cm">* @param 參數說明，這就是一個javadoc tag，*可有可無。</span>
-</span><span class='line'><span class="cm">*/</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>上列第一項的規範，引起另外兩個問題：</p>
-
-<ul>
-<li>一個package的要怎麼說明呢？</li>
-<li>更大的狀況，整個套件有多個package要怎麼說明呢？</li>
-</ul>
-
-
-<p>關於上面的情況，參考文件有提到：</p>
-
-<ul>
-<li>package的說明有兩種，請二擇一
-
-<ul>
-<li>寫在package同目錄中的 <code>package-info.java</code></li>
-<li>寫在package同目錄中的 <code>package.html</code>
-
-<ul>
-<li>請把javadoc的註解格式放在<code>&lt;body&gt;&lt;/body&gt;</code>之間</li>
-</ul>
-</li>
-</ul>
-</li>
-<li>整個套件的說明有兩種，需要寫一個html檔案，把你的說明放在裏面。並且在執行<code>javadoc</code>加入<code>-overview 你的套件html檔名</code></li>
-</ul>
-
-
-<p>很複雜嘛？看個範例，更改上面的範例</p>
-
-<ul>
-<li>Makefile，新增參數是指定<code>-overview</code>的檔案</li>
-</ul>
-
-
-<figure class='code'><figcaption><span>新增package和overview文件的 Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">SRC_PATH</span><span class="o">=</span>com/test
-</span><span class='line'><span class="nv">TARGET</span><span class="o">=</span><span class="k">$(</span>SRC_PATH<span class="k">)</span>/test
-</span><span class='line'><span class="nv">SRC_FILE</span><span class="o">=</span><span class="k">$(</span>addsuffix .java, <span class="k">$(</span>TARGET<span class="k">))</span>
-</span><span class='line'><span class="nv">SRC_FILE</span><span class="o">+=</span>package-info.java
-</span><span class='line'><span class="nv">OVERVIEW_FILE</span><span class="o">=</span>overview.html
-</span><span class='line'>
-</span><span class='line'><span class="nf">$(TARGET)</span><span class="o">:</span> <span class="k">$(</span><span class="nv">SRC_FILE</span><span class="k">)</span>
-</span><span class='line'>  javac <span class="nv">$^</span>
-</span><span class='line'>  javadoc -docletpath pdfdoclet-1.0.3/jar/pdfdoclet-1.0.3-all.jar <span class="se">\</span>
-</span><span class='line'>            -doclet com.tarsec.javadoc.pdfdoclet.PDFDoclet <span class="nv">$^</span> -verbose <span class="se">\</span>
-</span><span class='line'>            -pdf <span class="nv">$@</span>.pdf -overview <span class="k">$(</span>OVERVIEW_FILE<span class="k">)</span> -config config.properties
-</span><span class='line'>  evince <span class="k">$(</span>TARGET<span class="k">)</span>.pdf
-</span><span class='line'>
-</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
-</span><span class='line'>  rm -rf <span class="k">$(</span>SRC_PATH<span class="k">)</span>/*.class <span class="k">$(</span>TARGET<span class="k">)</span>.pdf
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>新增兩個檔案</p>
-
-<ul>
-<li>overview.html</li>
-</ul>
-
-
-<figure class='code'><figcaption><span>overview.html</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='html'><span class='line'><span class="nt">&lt;html&gt;</span>
-</span><span class='line'><span class="nt">&lt;body&gt;</span>
-</span><span class='line'>This a overview document for testing. It should supports javadoc overview tags. However, somehow my pdfdoclet did not get javadoc tag to work while javadoc generated file has no problem at all. There might some missing actions.
-</span><span class='line'>
-</span><span class='line'><span class="nt">&lt;/body&gt;</span>
-</span><span class='line'><span class="nt">&lt;/html&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li>package-info.java</li>
-</ul>
-
-
-<figure class='code'><figcaption><span>package-info.java</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="cm">/**</span>
-</span><span class='line'><span class="cm"> * This is a page to describe your package</span>
-</span><span class='line'><span class="cm"> */</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">package</span> <span class="n">test</span><span class="o">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>現在產出的pdf檔<a href="http://wen00072.github.io/files/javadoc-20150830/test_overview_package_info.pdf">如link，應該沒病毒吧?</a></p>
-
-<p><a name="jdoc-comments-tags"></a></p>
-
-<h3>javadoc 專用註解tag節錄</h3>
-
-<p>偷懶不列support 版本，需要自行找尋相關資料</p>
-
-<table border="1">
-<tr>
-<th>tag名稱</th>
-<th>功能</th>
-</tr>
-<tr>
-<td>@author 作者名稱</td>
-<td>請望文生義，預設不會放在產出網頁，需要透過command line才會出現在文件中</td>
-</tr>
-<tr>
-<td>{@code 程式碼}</td>
-<td>塞入程式碼</td>
-</tr>
-<tr>
-<td>{@docRoot}</td>
-<td>將會被展開替換成文件的最上層目錄，需要link到本機相對路徑檔案時很好用</td>
-</tr>
-<tr>
-<td>@deprecated 作廢說明文字</td>
-<td>作廢的API說明</td>
-</tr>
-<tr>
-<td>{@inheritDoc}</td>
-<td>當函數宣告的參數、回傳值或是expcetion沒說明時，這邊可以指定從那邊繼承。這些繼承關係也有些預設選項，一言難盡。這邊先跳過，有興趣的請自行找資料。</td>
-</tr>
-<tr>
-<td>@param 參數名稱 說明</td>
-<td>請望文生義</td>
-</tr>
-<tr>
-<td>@return 回傳值說明</td>
-<td>請望文生義</td>
-</tr>
-<tr>
-<td>@{value}</td>
-<td>顯示註解下方變數的常數</td>
-</tr>
-<tr>
-<td nowrap="nowrap">@since 文字，通常是版號</td>
-<td>指出該method, package, class等在哪個版號後有效</td>
-</tr>
-</table>
-
-
-<p>由於有些tag放到表格不易閱讀，獨立說明如下</p>
-
-<ul>
-<li><code>{@link package_名稱.class_名稱#member_函數名稱 顯示在文件的字串}</code>
-
-<ul>
-<li>在文件中產生package<em>名稱.class</em>名稱#member_函數名稱的link</li>
-</ul>
-</li>
-<li><code>{@linkplain package_名稱.class_名稱#member_函數名稱 顯示在文件的字串}</code>
-
-<ul>
-<li>在文件中產生package<em>名稱.class</em>名稱#member_函數名稱的link。但是顯示的文字不會有link</li>
-</ul>
-</li>
-<li><code>@exception class-名稱 exception_說明</code>
-
-<ul>
-<li>應該可以望文生義，另外@throw 也是同樣效果</li>
-</ul>
-</li>
-<li><code>@see</code> 家族，有三種
-
-<ul>
-<li><code>@see "字串"</code>
-
-<ul>
-<li>請讀者參考字串</li>
-</ul>
-</li>
-<li><code>@see &lt;a href="URL#value"&gt;Link顯示名稱&lt;/a&gt;</code>
-
-<ul>
-<li>請讀者參考連結</li>
-</ul>
-</li>
-<li> <code>@see package_名稱.class_名稱#member_函數名稱 顯示名稱</code>
-
-<ul>
-<li>建立本地連結到package<em>名稱.class</em>名稱#member_函數名稱</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-
-
-<p><a name="jdoc-comments-ex"></a></p>
-
-<h3>套用 javadoc 範例</h3>
-
-<figure class='code'><figcaption><span>最後的檔案和目錄結構</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ tree
-</span><span class='line'>.
-</span><span class='line'>├── com
-</span><span class='line'>│   └── test
-</span><span class='line'>│       └── test.java
-</span><span class='line'>├── config.properties
-</span><span class='line'>├── Makefile
-</span><span class='line'>├── overview.html
-</span><span class='line'>├── package-info.java
-</span><span class='line'>└── pdfdoclet-1.0.3
-</span><span class='line'>    ├── build.xml
-</span><span class='line'>       ....
-</span><span class='line'>    └── jar
-</span><span class='line'>        └── pdfdoclet-1.0.3-all.jar
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>加了javadoc的程式碼</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">package</span> <span class="n">com</span><span class="o">.</span><span class="na">test</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">/**</span>
-</span><span class='line'><span class="cm"> * A example to test javadoc tags</span>
-</span><span class='line'><span class="cm"> * &lt;p&gt;</span>
-</span><span class='line'><span class="cm"> * @see mul</span>
-</span><span class='line'><span class="cm"> * @see test.mul#multiply</span>
-</span><span class='line'><span class="cm">*/</span>
-</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">test</span> <span class="o">{</span>
-</span><span class='line'>    <span class="cm">/**</span>
-</span><span class='line'><span class="cm">     * multiply class, used by {@link test class test}</span>
-</span><span class='line'><span class="cm">    */</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">class</span> <span class="nc">mul</span> <span class="o">{</span>
-</span><span class='line'>        <span class="cm">/**</span>
-</span><span class='line'><span class="cm">         * @param i operand 1</span>
-</span><span class='line'><span class="cm">         * @param j operand 2</span>
-</span><span class='line'><span class="cm">         * @return result of i * j</span>
-</span><span class='line'><span class="cm">        */</span>
-</span><span class='line'>        <span class="kd">public</span> <span class="kt">int</span> <span class="nf">multiply</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span><span class="o">,</span> <span class="kt">int</span> <span class="n">j</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>            <span class="k">return</span> <span class="n">i</span> <span class="o">*</span> <span class="n">j</span><span class="o">;</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>    <span class="cm">/**</span>
-</span><span class='line'><span class="cm">     * Number of loop in multiplication: {@value}</span>
-</span><span class='line'><span class="cm">    */</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">MAX_NUM</span> <span class="o">=</span> <span class="mi">9</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">test</span> <span class="n">my_test</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">test</span><span class="o">();</span>
-</span><span class='line'>        <span class="n">my_test</span><span class="o">.</span><span class="na">hello</span><span class="o">();</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kd">private</span> <span class="kt">void</span> <span class="nf">hello</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">mul</span> <span class="n">my_mul</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">mul</span><span class="o">();</span>
-</span><span class='line'>        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">MAX_NUM</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-</span><span class='line'>            <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="o">;</span> <span class="n">j</span> <span class="o">&lt;=</span> <span class="n">MAX_NUM</span><span class="o">;</span> <span class="n">j</span><span class="o">++)</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">i</span> <span class="o">+</span> <span class="s">&quot; x &quot;</span> <span class="o">+</span> <span class="n">j</span> <span class="o">+</span> <span class="s">&quot; = &quot;</span> <span class="o">+</span> <span class="n">my_mul</span><span class="o">.</span><span class="na">multiply</span><span class="o">(</span><span class="n">i</span><span class="o">,</span> <span class="n">j</span><span class="o">));</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>最終產出的pdf檔<a href="http://wen00072.github.io/files/javadoc-20150830/test_final.pdf">如link，應該沒病毒吧?</a></p>
-
-<p><a name="jdoc-ref"></a></p>
-
-<h2>參考資料</h2>
-
-<ul>
-<li><a href="http://docs.oracle.com/javase/7/docs/technotes/tools/solaris/javadoc.html">javadoc - The Java API Documentation Generator</a></li>
-<li><a href="http://www.oracle.com/technetwork/articles/java/index-137868.html">How to Write Doc Comments for the Javadoc Tool</a></li>
-<li><a href="http://pdfdoclet.sourceforge.net/running.html">Running pdfdoclet</a></li>
-</ul>
 
 ]]></content>
   </entry>
