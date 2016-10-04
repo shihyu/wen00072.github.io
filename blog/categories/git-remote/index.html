@@ -5,11 +5,11 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>[Debian套件打包] 打包的測試驗證工具簡介 - My code works, I don&#8217;t know why.</title>
+  <title>Category: Git Remote - My code works, I don&#8217;t know why.</title>
   <meta name="author" content="Wen Liao">
 
   
-  <meta name="description" content="Debian New Maintainers' Guide提供了一些打包套件時出錯的建議 檢查quilt格式的patch是否有問題，可能是patch出問題、或是對應的套件工具出問題。後者的情況可以檢查並修正對應工具如dh-autoreconf或是更改source/ &hellip;">
+  <meta name="description" content="Category: git remote">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -18,7 +18,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://wen00072.github.io/blog/2014/06/17/package-debian-packages-testing-utilities/">
+  <link rel="canonical" href="http://wen00072.github.io/blog/categories/git-remote/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="My code works, I don't know why." type="application/atom+xml">
@@ -67,141 +67,53 @@
   <div id="main">
     <div id="content">
       <div>
-<article class="hentry" role="article">
+<article role="article">
   
   <header>
-    
-      <h1 class="entry-title">[Debian套件打包] 打包的測試驗證工具簡介</h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-<time class='entry-date' datetime='2014-06-17T06:36:00+08:00'><span class='date'><span class='date-month'>Jun</span> <span class='date-day'>17</span><span class='date-suffix'>th</span>, <span class='date-year'>2014</span></span> <span class='time'>6:36 am</span></time>
-        
-           | <a href="#disqus_thread"
-             data-disqus-identifier="http://wen00072.github.io">Comments</a>
-        
-      </p>
+    <h1 class="entry-title">Category: Git Remote</h1>
     
   </header>
-
-
-<div class="entry-content"><p>Debian New Maintainers&#8217; Guide提供了一些打包套件時出錯的建議</p>
-
-<ul>
-<li>檢查quilt格式的patch是否有問題，可能是patch出問題、或是對應的套件工具出問題。後者的情況可以檢查並修正對應工具如dh-autoreconf或是更改source/option作為workaround。</li>
-<li>測試安裝
-
-<ul>
-<li>工具<code>sudo debi 你套件產生的.changes檔案名稱</code> 可以協助檢查是否有問題。<strong>目前測試跑不起來，待釐清！！</strong></li>
-<li>要比對你打包的套件是否原本系統其他套件已經有<strong>相同的檔名</strong>。可以下載Contents-i386確認另外有網友建議更好用的方式<code>apt-file -D 你產生的套件</code>。不幸發生的話可以做
-
-<ul>
-<li>更改自己套件中衝突的檔名</li>
-<li>套件control檔案設定會和自己衝突的套件</li>
-<li>設定alternatives方式 <strong>To be studied!</strong></li>
-</ul>
-</li>
-</ul>
-</li>
-<li>測試script
-
-<ul>
-<li>使用dpkg測試install, remove, purge, 以及updage。手冊建議測試順序：
-
-<ul>
-<li>安裝上一版套件</li>
-<li>upgrade成你的套件，並且順便測downgrade</li>
-<li>purge上一版套件</li>
-<li>安裝你的套件</li>
-<li>remove</li>
-<li>再安裝</li>
-<li>purge</li>
-</ul>
-</li>
-<li>手冊建議初版套件可以自己弄幾個dummy版本套件測試更新退版的狀況。</li>
-</ul>
-</li>
-<li>使用lintian測試驗證套件是否有問題
-
-<ul>
-<li><code>lintian -i -I --show-overrides 你套件產生的.changes檔案名稱</code></li>
-</ul>
-</li>
-<li>使用debc顯示套件content資訊，驗證套件是否有問題
-
-<ul>
-<li><code>debc 你套件產生的.changes檔案名</code></li>
-</ul>
-</li>
-<li>如果您打包的是某套件的新版，可以透過<code>debdiff</code>比對新舊版的dsc檔案和changes檔案</li>
-<li>可以使用<code>interdiff</code>指令比對新舊套件的diff差別。</li>
-<li><code>mc</code>工具可以提供更詳細的壓縮或是以打包的檔案檢視，如tarball或是deb檔。(Wen: mc很好用，大力推荐！)</li>
-</ul>
-
-
-<h2>參考資料</h2>
-
-<ul>
-<li><a href="https://www.debian.org/doc/manuals/maint-guide/checkit.en.html">Debian New Maintainers&#8217; Guide: Chapter 7. Checking the package for errors</a></li>
-</ul>
-
-</div>
-
-
-  <footer>
-    <p class="meta">
-      
   
-
-<span class="byline author vcard">Posted by <span class="fn">Wen Liao</span></span>
-
-      
+  <div id="blog-archives" class="category">
 
 
 
-
-<time class='entry-date' datetime='2014-06-17T06:36:00+08:00'><span class='date'><span class='date-month'>Jun</span> <span class='date-day'>17</span><span class='date-suffix'>th</span>, <span class='date-year'>2014</span></span> <span class='time'>6:36 am</span></time>
-      
-
-<span class="categories">
   
-    <a class='category' href='/blog/categories/debian/'>debian</a>
+  <h2>2016</h2>
+
+<article>
   
-</span>
+<h1><a href="/blog/2016/01/24/talk-more-about-git-remote/">再談 Git Remote</a></h1>
+<time datetime="2016-01-24T20:30:32+08:00" pubdate><span class='month'>Jan</span> <span class='day'>24</span> <span class='year'>2016</span></time>
+
+<footer>
+  <span class="categories">posted in <a class='category' href='/blog/categories/git-remote/'>git remote</a></span>
+</footer>
 
 
-    </p>
-    
-      <div class="sharing">
-  
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://wen00072.github.io/blog/2014/06/17/package-debian-packages-testing-utilities/" data-via="" data-counturl="http://wen00072.github.io/blog/2014/06/17/package-debian-packages-testing-utilities/" >Tweet</a>
-  
-  
-  
-</div>
-
-    
-    <p class="meta">
-      
-        <a class="basic-alignment left" href="/blog/2014/06/16/regular-expression-with-python-standard-library-273-slides-on-line/" title="Previous Post: A Brief Introduction to Regular Expression with Python 2.7.3 Standard Library 投影片上線">&laquo; A Brief Introduction to Regular Expression with Python 2.7.3 Standard Library 投影片上線</a>
-      
-      
-        <a class="basic-alignment right" href="/blog/2014/06/17/package-debian-packages-how-to-update-the-existing-suite/" title="Next Post: [Debian套件打包] 如何更新現有套件並重新打包？">[Debian套件打包] 如何更新現有套件並重新打包？ &raquo;</a>
-      
-    </p>
-  </footer>
 </article>
 
-  <section>
-    <h1>Comments</h1>
-    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+
+
+  
+  <h2>2015</h2>
+
+<article>
+  
+<h1><a href="/blog/2015/03/06/talk-about-git-remote/">談談git Remote</a></h1>
+<time datetime="2015-03-06T07:15:00+08:00" pubdate><span class='month'>Mar</span> <span class='day'>06</span> <span class='year'>2015</span></time>
+
+<footer>
+  <span class="categories">posted in <a class='category' href='/blog/categories/git-remote/'>git remote</a></span>
+</footer>
+
+
+</article>
+
 </div>
-  </section>
+
+  
+</article>
 
 </div>
 
@@ -269,10 +181,7 @@
       var disqus_shortname = 'httpwen00072githubio';
       
         
-        // var disqus_developer = 1;
-        var disqus_identifier = 'http://wen00072.github.io/blog/2014/06/17/package-debian-packages-testing-utilities/';
-        var disqus_url = 'http://wen00072.github.io/blog/2014/06/17/package-debian-packages-testing-utilities/';
-        var disqus_script = 'embed.js';
+        var disqus_script = 'count.js';
       
     (function () {
       var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;

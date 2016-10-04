@@ -9,16 +9,17 @@
   <meta name="author" content="Wen Liao">
 
   
-  <meta name="description" content="目錄 前言
-測試環境
-範例：版本一
-範例：版本二
-範例：版本三
-範例：版本四
-總結
-延伸閱讀及致謝
-參考資料 前言 之前的文章有不少在討論執行檔該長怎麼樣。簡單來說，一個執行檔會有 Sections：程式行為和資料會分開放在不同的sections
-進入點，也就是system &hellip;">
+  <meta name="description" content="之前有提到Octopress在文章夠多的時候產生網頁很慢，有號溝的方法。每次要用的時候都要打一狗票。偷懶是組裝工的美德，所以寫了一個script，喜歡的人自己拿去用吧。 這個script主要是 例行檢查
+isolate、preview、generate文件 1
+2
+3
+4
+5
+6
+7
+8
+9
+10 &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -77,681 +78,6 @@
     <div id="content">
       <div class="blog-index">
   
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/04/22/hello-assembly/">Hello Linux ARM 組合語言</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-<time class='entry-date' datetime='2015-04-22T21:34:16+08:00'><span class='date'><span class='date-month'>Apr</span> <span class='date-day'>22</span><span class='date-suffix'>nd</span>, <span class='date-year'>2015</span></span> <span class='time'>9:34 pm</span></time>
-        
-           | <a href="/blog/2015/04/22/hello-assembly/#disqus_thread"
-             data-disqus-identifier="http://wen00072.github.io/blog/2015/04/22/hello-assembly/">Comments</a>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><h2>目錄</h2>
-
-<ul>
-<li><a href="#hello-asm-syntax">前言</a></li>
-<li><a href="#hello-asm-env">測試環境</a></li>
-<li><a href="#hello-asm-ex1">範例：版本一</a></li>
-<li><a href="#hello-asm-ex2">範例：版本二</a></li>
-<li><a href="#hello-asm-ex3">範例：版本三</a></li>
-<li><a href="#hello-asm-ex4">範例：版本四</a></li>
-<li><a href="#hello-asm-conl">總結</a></li>
-<li><a href="#hello-asm-ext">延伸閱讀及致謝</a></li>
-<li><a href="#hello-asm-ref">參考資料</a></li>
-</ul>
-
-
-<p><a name="hello-asm-syntax"></a></p>
-
-<h2>前言</h2>
-
-<p>之前的文章有不少在討論執行檔該長怎麼樣。簡單來說，一個執行檔會有</p>
-
-<ul>
-<li>Sections：程式行為和資料會分開放在不同的sections</li>
-<li>進入點，也就是system call開始執行你的程式的地方</li>
-</ul>
-
-
-<p>以這樣的觀點，來看組合語言，會比較有感覺。</p>
-
-<p>這次主要想要試看看如何使用組合語言印出Hello world。學過作業系統的朋友應該知道OS真正提供給使用者的介面叫作system call。有興趣的朋友可以使用<code>strace</code>研究執行檔呼叫了那些system call。這次的Hello world我有兩個線索</p>
-
-<ul>
-<li>在command line執行的process會有3個馬上可以使用的file descriptor（不知道那啥的請自行估狗）分別是
-
-<ul>
-<li><code>0</code>: standard in</li>
-<li><code>1</code>: standard out</li>
-<li><code>2</code>: standard error</li>
-</ul>
-</li>
-<li>有一個system call叫作<code>write</code>，你可以透過他把任何資料寫到指令的file descriptor</li>
-</ul>
-
-
-<p>綜合以上，我們要幹的事就是透過組合語言做出</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">write</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">&quot;Hello world</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="mi">12</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>這又表示組合語言中我們要做</p>
-
-<ul>
-<li>呼叫system call</li>
-<li>帶參數給system call，這部份需要有
-
-<ul>
-<li>ABI的背景知識</li>
-<li>定址方式，更精確的說，如何宣告<code>"Hello world\n"</code>，讓runtime時放在在process address space中，並將它的位址傳給system call</li>
-</ul>
-</li>
-</ul>
-
-
-<p><a name="hello-asm-env"></a></p>
-
-<h2>測試環境</h2>
-
-<ul>
-<li>Host</li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ lsb_release -a
-</span><span class='line'>No LSB modules are available.
-</span><span class='line'>Distributor ID:   Ubuntu
-</span><span class='line'>Description:  Ubuntu 14.04.2 LTS
-</span><span class='line'>Release:  14.04
-</span><span class='line'>Codename: trusty
-</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li>Guest OS on Qemu
-
-<ul>
-<li>這邊很奇怪我的kernel用更新過的版本Qemu完全無法開機。目前裝死中。</li>
-</ul>
-</li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ lsb_release -a
-</span><span class='line'>No LSB modules are available.
-</span><span class='line'>Distributor ID:   Debian
-</span><span class='line'>Description:  Debian GNU/Linux 8.0 (jessie)
-</span><span class='line'>Release:  8.0
-</span><span class='line'>Codename: jessie
-</span><span class='line'>
-</span><span class='line'>$ cat /proc/cpuinfo
-</span><span class='line'>Processor : ARM926EJ-S rev 5 (v5l)
-</span><span class='line'>BogoMIPS  : 643.48
-</span><span class='line'>Features  : swp half thumb fastmult vfp edsp java
-</span><span class='line'>CPU implementer   : 0x41
-</span><span class='line'>CPU architecture: 5TEJ
-</span><span class='line'>CPU variant   : 0x0
-</span><span class='line'>CPU part  : 0x926
-</span><span class='line'>CPU revision  : 5
-</span><span class='line'>
-</span><span class='line'>Hardware  : ARM-Versatile AB
-</span><span class='line'>Revision  : 0000
-</span><span class='line'>Serial        : 0000000000000000
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a name="hello-asm-ex1"></a></p>
-
-<h2>範例：版本一</h2>
-
-<p>我本來想說慢慢來，先來個完全沒意義的r0 = 0; r1 = 1; r2 = r0 + r1。程式如下：</p>
-
-<figure class='code'><figcaption><span>hello.s</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="na">.text</span>
-</span><span class='line'><span class="na">.global</span> <span class="no">_start</span>
-</span><span class='line'><span class="nl">_start:</span>
-</span><span class='line'>    <span class="nf">mov</span> <span class="nv">%r0</span><span class="p">,</span> <span class="no">$0</span>
-</span><span class='line'>    <span class="nf">mov</span> <span class="nv">%r1</span><span class="p">,</span> <span class="no">$1</span>
-</span><span class='line'>    <span class="nf">add</span> <span class="nv">%r2</span><span class="p">,</span> <span class="nv">%r0</span><span class="p">,</span> <span class="nv">%r1</span>
-</span><span class='line'><span class="na">.end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>幾點說明：</p>
-
-<ul>
-<li><code>$</code>或是<code>#</code>代表一個數字(<a href="https://sourceware.org/binutils/docs/as/ARM_002dChars.html#ARM_002dChars">出處</a>)</li>
-<li><code>%r1</code>代表ARM的<code>r1</code>暫存器，但是為何用<code>%</code>目前沒找到手冊上有說明。</li>
-<li><code>.text</code>前面的文章有看應該覺得很眼熟，就是告訴編譯器以下是程式行為。</li>
-<li><code>global</code>是讓symbol可以外露，白話來說就是<code>nm</code>等binutil可以看的到這個symbol。</li>
-<li><code>_start</code>是一個程式執行的起始點，有看過<a href="http://wen00072.github.io/blog/2015/02/14/main-linux-whos-going-to-call-in-c-language/">之前文章</a>就會覺得很眼熟。</li>
-<li><p><a href="https://sourceware.org/binutils/docs/as/End.html#End">.end表示程式結束點</a>，不過目前用起來有沒有加好像沒有差別。</p></li>
-<li><p>Makefile</p></li>
-</ul>
-
-
-<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">TARGET</span><span class="o">=</span>hello
-</span><span class='line'><span class="nv">AS_FILE</span><span class="o">=</span><span class="k">$(</span>addsuffix .s, <span class="k">$(</span>TARGET<span class="k">))</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">$(TARGET)</span><span class="o">:</span> <span class="k">$(</span><span class="nv">AS_FILE</span><span class="k">)</span>
-</span><span class='line'>  <span class="k">$(</span>AS<span class="k">)</span> <span class="nv">$^</span> -o <span class="nv">$@</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
-</span><span class='line'>  rm -rf <span class="k">$(</span>TARGET<span class="k">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>想法很簡單，就是直接編譯應該可以跑，雖然完全不會有畫面。<font color="red">錯！</font>跑出來會這樣</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make
-</span><span class='line'>as hello.s -o hello
-</span><span class='line'>
-</span><span class='line'>$ ls -gG
-</span><span class='line'>total 12
-</span><span class='line'>-rw-r--r-- 1 588 Apr 20 18:04 hello
-</span><span class='line'>-rw-r--r-- 1  83 Apr 20 17:58 hello.s
-</span><span class='line'>-rw-r--r-- 1 113 Apr 20 17:58 Makefile
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>這代表什麼，hello編譯完後的binary本身沒有執行權限。改改權限看可不可以跑？</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ chmod +x hello
-</span><span class='line'>$ ./hello
-</span><span class='line'>bash: ./hello: cannot execute binary file: Exec format error
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>怎麼回事？分析一下</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ readelf hello -h
-</span><span class='line'>ELF Header:
-</span><span class='line'>  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00
-</span><span class='line'>  Class:                             ELF32
-</span><span class='line'>  Data:                              2&#39;s complement, little endian
-</span><span class='line'>  Version:                           1 (current)
-</span><span class='line'>  OS/ABI:                            UNIX - System V
-</span><span class='line'>  ABI Version:                       0
-</span><span class='line'>  Type:                              REL (Relocatable file)
-</span><span class='line'>  Machine:                           ARM
-</span><span class='line'>  Version:                           0x1
-</span><span class='line'>  Entry point address:               0x0
-</span><span class='line'>  Start of program headers:          0 (bytes into file)
-</span><span class='line'>  Start of section headers:          268 (bytes into file)
-</span><span class='line'>  Flags:                             0x5000000, Version5 EABI
-</span><span class='line'>  Size of this header:               52 (bytes)
-</span><span class='line'>  Size of program headers:           0 (bytes)
-</span><span class='line'>  Number of program headers:         0
-</span><span class='line'>  Size of section headers:           40 (bytes)
-</span><span class='line'>  Number of section headers:         8
-</span><span class='line'>  Section header string table index: 5
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>看不出來對不對？我是這樣啦，所以先比對<code>/bin/ls</code>的輸出吧</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ readelf /bin/ls -h
-</span><span class='line'>ELF Header:
-</span><span class='line'>  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00
-</span><span class='line'>  Class:                             ELF32
-</span><span class='line'>  Data:                              2&#39;s complement, little endian
-</span><span class='line'>  Version:                           1 (current)
-</span><span class='line'>  OS/ABI:                            UNIX - System V
-</span><span class='line'>  ABI Version:                       0
-</span><span class='line'>  Type:                              EXEC (Executable file)
-</span><span class='line'>  Machine:                           ARM
-</span><span class='line'>  Version:                           0x1
-</span><span class='line'>  Entry point address:               0x14354
-</span><span class='line'>  Start of program headers:          52 (bytes into file)
-</span><span class='line'>  Start of section headers:          99372 (bytes into file)
-</span><span class='line'>  Flags:                             0x5000202, has entry point, Version5 EABI, soft-float ABI
-</span><span class='line'>  Size of this header:               52 (bytes)
-</span><span class='line'>  Size of program headers:           32 (bytes)
-</span><span class='line'>  Number of program headers:         9
-</span><span class='line'>  Size of section headers:           40 (bytes)
-</span><span class='line'>  Number of section headers:         27
-</span><span class='line'>  Section header string table index: 26
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>仔細看一下<code>Type:</code>，<code>/bin/ls</code>是<code>EXEC</code>而<code>hello</code>是<code>REL</code>，<code>man elf</code>可以看到<code>REL</code>是relocate file，那是啥呢？根據<a href="http://www.sco.com/developers/gabi/latest/contents.html">System V Application Binary Interface - DRAFT - 10 June 2013第四章的簡介</a>，簡單來說就是object檔案，也就是說link時吃的檔案。所以我們加入Link吧。</p>
-
-<p><a name="hello-asm-ex2"></a></p>
-
-<h2>範例：版本二</h2>
-
-<p>單純加入linker看看會怎樣？</p>
-
-<figure class='code'><figcaption><span>Makefile</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">TARGET</span><span class="o">=</span>hello
-</span><span class='line'><span class="nv">AS_FILE</span><span class="o">=</span><span class="k">$(</span>addsuffix .s, <span class="k">$(</span>TARGET<span class="k">))</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">$(TARGET)</span><span class="o">:</span> <span class="k">$(</span><span class="nv">AS_FILE</span><span class="k">)</span>
-</span><span class='line'>  <span class="k">$(</span>AS<span class="k">)</span> <span class="nv">$^</span> -o <span class="nv">$@</span>.o
-</span><span class='line'>  <span class="k">$(</span>LD<span class="k">)</span> <span class="nv">$@</span>.o -o <span class="nv">$@</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">clean</span><span class="o">:</span>
-</span><span class='line'>  rm -rf <span class="k">$(</span>TARGET<span class="k">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>kerker，一樣GG。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make
-</span><span class='line'>as hello.s -o hello.o
-</span><span class='line'>ld hello.o -o hello
-</span><span class='line'>$ ./hello
-</span><span class='line'>Illegal instruction
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>估狗到的組合語言的<a href="http://peterdn.com/post/e28098Hello-World!e28099-in-ARM-assembly.aspx">Hello world範例</a>最後會呼叫<code>exit</code> system call，照著呼叫<code>exit</code>就可以正常結束，這就是第三版。至於為何會出現<code>Illegal instruction</code>，根據<a href="http://scottt.tw/">Scott Tsai大大</a>的提示，當你的程式碼跑完後，接下來記憶體有啥CPU就跑啥，跑到不認識的opcode當然就GG了。</p>
-
-<p><a name="hello-asm-ex3"></a></p>
-
-<h2>範例：版本三</h2>
-
-<figure class='code'><figcaption><span>hello.s</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="na">.text</span>
-</span><span class='line'><span class="na">.global</span> <span class="no">_start</span>
-</span><span class='line'><span class="nl">_start:</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r0</span><span class="p">,</span> <span class="no">$0</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r7</span><span class="p">,</span> <span class="no">$1</span>
-</span><span class='line'>    <span class="nf">svc</span>     <span class="no">$0</span>
-</span><span class='line'><span class="na">.end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>單純叫了<code>exit</code>而已，有幾點注意的
-根據<a href="https://wiki.debian.org/ArmEabiPort#System_call_interface">Debian ARM system call interface</a>，可以知道</p>
-
-<ul>
-<li>r0 ~ r6是函數的帶入參數</li>
-<li>r7 是system call number，而system call number是啥呢？就是你要的system call 對應的數字。</li>
-</ul>
-
-
-<p>所以要呼叫<code>exit(0)</code> system 表示</p>
-
-<ul>
-<li>傳一個參數，數值為<code>0</code></li>
-<li>要設定<code>exit</code>對應的system call number為<code>1</code>。</li>
-</ul>
-
-
-<p>為何system call number是<code>1</code>呢？可以看看<a href="https://git.kernel.org/cgit/linux/kernel/git/rpi/linux-rpi.git/tree/arch/arm/include/asm/unistd.h">unistd.h</a>裏面system call number的定義，exit的system call number為<code>1</code>。</p>
-
-<p>設定完傳給<code>exit</code>參數後呼叫了一個組合語言指令<a href="http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0489g/Cihidabi.htmll"><code>svc</code></a>，這個指令主要是切換到Supervisor模式。Linux下面也許太過複雜，不太容易從user mode一路追到kernel然後又看懂這些system call的行為。沒關係成大資工作業有比較看得懂的範例可以參考。例如<a href="https://github.com/embedded2014/rtenv/blob/master/syscall.s#L6">包裝呼叫system call的函數</a>以及<a href="https://github.com/embedded2014/rtenv/blob/master/kernel.c#L1135">Kernel中對應的system call服務實作</a>。</p>
-
-<p>根據<a href="https://git.kernel.org/cgit/linux/kernel/git/rpi/linux-rpi.git/tree/arch/arm/include/asm/unistd.h">unistd.h</a>定義的system call number，<code>write</code>的system call number 是<code>4</code>，所以我們可以開始寫最後的版本了。</p>
-
-<p><a name="hello-asm-ex4"></a></p>
-
-<h2>範例：版本四</h2>
-
-<p>開始之前，先來看男人怎麼介紹write system call的</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="kt">ssize_t</span> <span class="nf">write</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span> <span class="o">*</span><span class="n">buf</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">count</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>這代表</p>
-
-<ul>
-<li>有三個參數要傳給system call</li>
-<li>有回傳值可以吃</li>
-<li>其中一個參數是位址，這個位址我們會放<code>"Hello World\n"</code>字串</li>
-</ul>
-
-
-<p>那麼我先來看看怎麼放字串到記憶體</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="p">.</span><span class="n">data</span>
-</span><span class='line'><span class="nl">hello_str</span><span class="p">:</span>
-</span><span class='line'>    <span class="p">.</span><span class="n">ascii</span> <span class="s">&quot;Hello World</span><span class="se">\n</span><span class="s">&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>.data</code>如果有看我以前的文章，就知道這是放有初始值全域變數的地方。</p>
-
-<p>而<code>hello_str</code>呢?嗯，對<code>_start:</code>有印象嗎？</p>
-
-<p>這叫作label，是GNU組語中symbol的一種，有興趣可以看<a href="https://sourceware.org/binutils/docs/as/Labels.html#Labels">這邊</a>。根據手冊，label還有一個功能，代表目前跑到的位址。所以<code>_start:</code>就是<code>.text</code> section的起始位址。而<code>hello_str</code>就是<code>.data</code> section的起始位址。從這兩個label可以看到label只是一個位址，可以指向函數或是資料，這和C語言的指標有異曲同工之妙。有興趣的朋友可以去找function pointer和C語言的callback函數。</p>
-
-<p>而<a href="https://sourceware.org/binutils/docs/as/Ascii.html#Ascii"><code>.ascii</code></a>，單純就是宣告字串指令。</p>
-
-<p>呼叫<code>write</code> system call來還有兩個問題要處理</p>
-
-<ul>
-<li>如何取得<code>hello_str</code>對應的位址放到暫存器<code>r1</code>上面？</li>
-<li>要怎麼算出<code>hello_str</code>字串的長度?</li>
-</ul>
-
-
-<p>關於第一個問題，<a href="https://sourceware.org/binutils/docs/as/ARM-Opcodes.html#ARM-Opcodes">GNU ARM組合語言有中將數值或位址放到暫存器的虛擬指令</a></p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="nf">ldr</span> <span class="err">&lt;</span><span class="no">register</span><span class="err">&gt;</span> <span class="p">,</span> <span class="err">=</span> <span class="err">&lt;</span><span class="no">expression</span><span class="err">&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><a href="https://sourceware.org/binutils/docs/as/Expressions.html#Expressions">expression</a>是一種表示<strong>位置</strong>或是<strong>數值</strong>的方式。</p>
-
-<p>恰巧<a href="https://sourceware.org/binutils/docs/as/Arguments.html#Arguments">symbol也算是一個expression</a>，所以可以表示成：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="nf">ldr</span> <span class="nv">%r1</span><span class="p">,</span> <span class="err">=</span><span class="no">hello_str</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>第二個問題呢？要介紹<a href="https://sourceware.org/binutils/docs/as/Dot.html#Dot"><code>.</code></a>了。之前看過linker script的朋友應該對於locale counter還有印象。locale counter代表目前的位置。加上<a href="https://sourceware.org/binutils/docs/as/Prefix-Ops.html#Prefix-Ops"><code>expression</code>也支援運算</a>。利用<code>hello_str</code>是<code>.data</code>
-開頭，我們可以這樣做:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="na">.data</span>
-</span><span class='line'><span class="nl">hello_str:</span>
-</span><span class='line'>    <span class="nf">ascii</span> <span class="err">&quot;</span><span class="no">Hello</span> <span class="no">World</span><span class="err">\</span><span class="no">n</span><span class="err">&quot;</span>
-</span><span class='line'><span class="nf">hello_len</span> <span class="err">=</span> <span class="p">.</span> <span class="p">-</span> <span class="no">hello_str</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>綜合上面的討論，版本四組合語言會是</p>
-
-<figure class='code'><figcaption><span>hello.s</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-</pre></td><td class='code'><pre><code class='asm'><span class='line'><span class="na">.data</span>
-</span><span class='line'><span class="nl">hello_str:</span>
-</span><span class='line'>    <span class="na">.ascii</span> <span class="s">&quot;Hello World\n&quot;</span>
-</span><span class='line'><span class="nf">hello_len</span> <span class="err">=</span> <span class="p">.</span> <span class="p">-</span> <span class="no">hello_str</span>
-</span><span class='line'>
-</span><span class='line'><span class="na">.text</span>
-</span><span class='line'><span class="na">.global</span> <span class="no">_start</span>
-</span><span class='line'><span class="nl">_start:</span>
-</span><span class='line'>    <span class="err">/*</span> <span class="err">%</span><span class="nf">r0</span> <span class="err">=</span> <span class="no">write</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="no">hello_str</span><span class="p">,</span> <span class="no">hello_len</span><span class="p">)</span><span class="err">;</span> <span class="p">*</span><span class="err">/</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r0</span><span class="p">,</span> <span class="no">$1</span>
-</span><span class='line'>    <span class="nf">ldr</span>     <span class="nv">%r1</span><span class="p">,</span> <span class="err">=</span><span class="no">hello_str</span>
-</span><span class='line'>    <span class="nf">ldr</span>     <span class="nv">%r2</span><span class="p">,</span> <span class="err">=</span><span class="no">hello_len</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r7</span><span class="p">,</span> <span class="no">$4</span>
-</span><span class='line'>    <span class="nf">svc</span>     <span class="no">$0</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="err">/*</span> <span class="nf">exit</span><span class="p">(</span><span class="nv">%r0</span><span class="p">)</span> <span class="p">*</span><span class="err">/</span>
-</span><span class='line'>    <span class="nf">mov</span>     <span class="nv">%r7</span><span class="p">,</span> <span class="no">$1</span>
-</span><span class='line'>    <span class="nf">svc</span>     <span class="no">$0</span>
-</span><span class='line'>
-</span><span class='line'><span class="na">.end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>等等，不是說有回傳值？還是要看<a href="http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ihi0042e/index.html">Procedure Call Standard for the ARM Architecture
-ABI r2.09手冊</a>，上面提到回傳資料會放到<code>r0</code>，剛好接下來的<code>exit</code> system call帶的第一個參數也要存放在r0，那麼我們可以直接觀察執行後回傳值如下：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>$ make
-</span><span class='line'>as hello.s -o hello.o
-</span><span class='line'>ld hello.o -o hello
-</span><span class='line'>
-</span><span class='line'>$ ./hello
-</span><span class='line'>Hello World
-</span><span class='line'>$ echo $?
-</span><span class='line'>12
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>補充</h3>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>ldr &lt;register&gt; , = &lt;expression&gt;
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>這是個有趣的指令，這個指令事實上是個虛擬指令。怎麼說呢，因為這個指令的目標是<strong>把數值塞到指定的暫存器</strong>。這個數值是位址還是啥死人骨頭並不重要。重要的是，由於opcode的限制，把數值塞到指定的暫存器會有限制滴。例如<code>ARM Cortex M0</code>的<code>MOV</code>的數值只有8-bit，要塞32-bit的數值就需要配合其他的指令做連續技。因此</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='text'><span class='line'>ldr &lt;register&gt; , = &lt;expression&gt;
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>這樣的指令就可以讓你寫起來比較輕鬆。</p>
-
-<p>另外一個值得一提是，如果組譯器無法把<code>ldr &lt;register&gt; , = &lt;expression&gt;</code>虛擬指令轉換成<code>MOV</code>或<code>MVN</code>指令，把你的數值塞到暫存器的話。組譯器會把你的值放在一塊記憶體中，使用<strong>真的</strong>ldr把這塊記憶體的值載入到暫存器中。這個方法稱為literal pool，細節可以看<a href="http://infocenter.arm.com/help/index.jsp?topic=%2Fcom.arm.doc.dui0473c%2FBgbccbdi.html">這邊</a>。</p>
-
-<p><a name="hello-asm-conl"></a></p>
-
-<h2>總結</h2>
-
-<p>本文從會GG的組合語言一路改到可以印出Hello World，並且在程式結束後回傳字串長度。在文章中簡單提到了GNU as的</p>
-
-<ul>
-<li>組合語言中section</li>
-<li>組合語言的編譯方式</li>
-<li>組合語言中的symbol和字串表示方式</li>
-<li>組合語言中的expression</li>
-<li>ABI實例</li>
-</ul>
-
-
-<p>希望對有需要的朋友有所幫助。</p>
-
-<p><a name="hello-asm-ext"></a></p>
-
-<h2>延伸閱讀及致謝</h2>
-
-<p>感謝<a href="http://scottt.tw/">Scott Tsai大大</a>提供的資料以及指出文章中錯誤的地方。另外他也有提到其他有趣的部份，當作以後的作業。先列出如下</p>
-
-<ul>
-<li><a href="http://stackoverflow.com/questions/28831763/hello-world-program-in-nasm-x86-64-prints-hello-world-continuously/28837680#28837680">從組合語言直接呼叫header file內的system call</a></li>
-<li><a href="http://www.arm.linux.org.uk/developer/memory.txt">Kernel Memory Layout on ARM Linux</a>
-
-<ul>
-<li>這邊主要討論的是<code>objdump -d</code>發現obj檔和執行檔差別只在進入點位址的差別，而進入點位址如何決定呢？這邊有規範，另外也可以看default linker script看看如何設定的。</li>
-</ul>
-</li>
-<li><a href="https://gist.github.com/scottt/a57220efc15d15569a2e">Scott大大的範例程式</a>
-
-<ul>
-<li>可以看到，這個版本和我參考寫出來的版本差異有
-
-<ul>
-<li>把<code>"Hello world"</code>放在<code>.rodata</code> section中，這比<code>.data</code>更實際，因為這個字串的確沒有必要設成全域變數。</li>
-<li>使用了preprocess方式。</li>
-<li>提供了反組譯的結果</li>
-<li>提供X86-64版本的組合語言比較</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-
-
-<p>感謝<a href="http://vh21.github.io">Viler Hsiao大大</a>寫文回答我的問題。</p>
-
-<ul>
-<li><a href="http://vh21.github.io/assembly/2015/04/20/read-assembly-code.html">Viler Hsiao: 閱讀assembly code</a></li>
-</ul>
-
-
-<p><a name="hello-asm-ref"></a></p>
-
-<h2>參考資料</h2>
-
-<ul>
-<li><a href="http://peterdn.com/post/e28098Hello-World!e28099-in-ARM-assembly.aspx">『Hello World!』 in ARM assembly</a>
-
-<ul>
-<li>本篇程式碼大量參考這篇。</li>
-</ul>
-</li>
-<li><a href="https://sourceware.org/binutils/docs/as/index.html">GNU Manual: Using as</a></li>
-</ul>
-
-</div>
-  
-  
-
-
-    </article>
   
   
     <article>
@@ -1686,6 +1012,55 @@ ABI r2.09手冊</a>，上面提到回傳資料會放到<code>r0</code>，剛好�
 
     </article>
   
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/03/25/hello-world/">Hello World</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+<time class='entry-date' datetime='2015-03-25T00:06:03+08:00'><span class='date'><span class='date-month'>Mar</span> <span class='date-day'>25</span><span class='date-suffix'>th</span>, <span class='date-year'>2015</span></span> <span class='time'>12:06 am</span></time>
+        
+           | <a href="/blog/2015/03/25/hello-world/#disqus_thread"
+             data-disqus-identifier="http://wen00072.github.io/blog/2015/03/25/hello-world/">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h2>hello.c</h2>
+
+<figure class='code'><figcaption><span>hello.c</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="cp">#incldue &lt;stdio.h&gt;</span>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;Hello World</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+</div>
+  
+  
+
+
+    </article>
+  
   <div class="pagination">
     
       <a class="prev" href="/posts/5">&larr; Older</a>
@@ -1727,15 +1102,15 @@ ABI r2.09手冊</a>，上面提到回傳資料會放到<code>r0</code>，剛好�
 
 <section>
   <h1>Top Categories</h1>
-    <ul id="top-category-list"><li><a href='/blog/categories/linux'>linux (41)</a></li><li><a href='/blog/categories/c'>c (28)</a></li><li><a href='/blog/categories/debian'>debian (16)</a></li><li><a href='/blog/categories/presentation'>presentation (14)</a></li><li><a href='/blog/categories/binutils'>binutils (14)</a></li><li><a href='/blog/categories/arm'>arm (11)</a></li><li><a href='/blog/categories/gan-xiang'>感想 (8)</a></li><li><a href='/blog/categories/octopress'>octopress (8)</a></li><li><a href='/blog/categories/make'>make (6)</a></li><li><a href='/blog/categories/stm32'>stm32 (5)</a></li></ul>
+    <ul id="top-category-list"><li><a href='/blog/categories/linux'>linux (41)</a></li><li><a href='/blog/categories/c'>c (28)</a></li><li><a href='/blog/categories/debian'>debian (16)</a></li><li><a href='/blog/categories/binutils'>binutils (14)</a></li><li><a href='/blog/categories/presentation'>presentation (14)</a></li><li><a href='/blog/categories/arm'>arm (11)</a></li><li><a href='/blog/categories/gan-xiang'>感想 (8)</a></li><li><a href='/blog/categories/octopress'>octopress (8)</a></li><li><a href='/blog/categories/make'>make (6)</a></li><li><a href='/blog/categories/stm32'>stm32 (5)</a></li></ul>
 </section>
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arm'>arm (11)</a></li><li><a href='/blog/categories/asm'>asm (1)</a></li><li><a href='/blog/categories/assembler'>assembler (2)</a></li><li><a href='/blog/categories/assembly'>assembly (3)</a></li><li><a href='/blog/categories/autotools'>autotools (4)</a></li><li><a href='/blog/categories/banana-pi'>banana pi (1)</a></li><li><a href='/blog/categories/bash'>bash (1)</a></li><li><a href='/blog/categories/binutils'>binutils (14)</a></li><li><a href='/blog/categories/buildroot'>buildroot (2)</a></li><li><a href='/blog/categories/c'>c (28)</a></li><li><a href='/blog/categories/c-preprocessor'>c preprocessor (1)</a></li><li><a href='/blog/categories/c99'>c99 (1)</a></li><li><a href='/blog/categories/cmake'>cmake (2)</a></li><li><a href='/blog/categories/dbdoclet'>dbdoclet (1)</a></li><li><a href='/blog/categories/debian'>debian (16)</a></li><li><a href='/blog/categories/debootstrap'>debootstrap (1)</a></li><li><a href='/blog/categories/doxygen'>doxygen (1)</a></li><li><a href='/blog/categories/f9'>f9 (1)</a></li><li><a href='/blog/categories/free-software'>free software (1)</a></li><li><a href='/blog/categories/freertos'>freertos (1)</a></li><li><a href='/blog/categories/fsf'>fsf (1)</a></li><li><a href='/blog/categories/gcc'>gcc (2)</a></li><li><a href='/blog/categories/gdb'>gdb (1)</a></li><li><a href='/blog/categories/getopt'>getopt (1)</a></li><li><a href='/blog/categories/gettext'>gettext (2)</a></li><li><a href='/blog/categories/git'>git (5)</a></li><li><a href='/blog/categories/github-flavored-markdown'>github flavored markdown (1)</a></li><li><a href='/blog/categories/github-pages'>github pages (1)</a></li><li><a href='/blog/categories/gnu'>gnu (1)</a></li><li><a href='/blog/categories/gnu-as'>gnu as (1)</a></li><li><a href='/blog/categories/got'>got (1)</a></li><li><a href='/blog/categories/gpl'>gpl (1)</a></li><li><a href='/blog/categories/gstreamer'>gstreamer (1)</a></li><li><a href='/blog/categories/hole'>hole (1)</a></li><li><a href='/blog/categories/inline'>inline (1)</a></li><li><a href='/blog/categories/javadoc'>javadoc (2)</a></li><li><a href='/blog/categories/ld'>ld (1)</a></li><li><a href='/blog/categories/libtool'>libtool (2)</a></li><li><a href='/blog/categories/linker'>linker (1)</a></li><li><a href='/blog/categories/linker-script'>linker script (5)</a></li><li><a href='/blog/categories/linux'>linux (41)</a></li><li><a href='/blog/categories/linux-kernel'>linux kernel (2)</a></li><li><a href='/blog/categories/linux-utilities'>linux utilities (2)</a></li><li><a href='/blog/categories/live-cd'>live cd (1)</a></li><li><a href='/blog/categories/lseek'>lseek (1)</a></li><li><a href='/blog/categories/macro'>macro (1)</a></li><li><a href='/blog/categories/make'>make (6)</a></li><li><a href='/blog/categories/markdown'>markdown (2)</a></li><li><a href='/blog/categories/octopress'>octopress (8)</a></li><li><a href='/blog/categories/osm'>osm (1)</a></li><li><a href='/blog/categories/patch'>patch (1)</a></li><li><a href='/blog/categories/pbuilder'>pbuilder (2)</a></li><li><a href='/blog/categories/pomodoro-technique'>pomodoro technique (1)</a></li><li><a href='/blog/categories/presentation'>presentation (14)</a></li><li><a href='/blog/categories/python'>python (3)</a></li><li><a href='/blog/categories/qemu'>qemu (3)</a></li><li><a href='/blog/categories/quilt'>quilt (1)</a></li><li><a href='/blog/categories/regex'>regex (1)</a></li><li><a href='/blog/categories/rtenv'>rtenv (1)</a></li><li><a href='/blog/categories/rtos'>rtos (1)</a></li><li><a href='/blog/categories/semihosting'>semihosting (1)</a></li><li><a href='/blog/categories/shell-script'>shell script (4)</a></li><li><a href='/blog/categories/software-development'>software development (1)</a></li><li><a href='/blog/categories/stm32'>stm32 (5)</a></li><li><a href='/blog/categories/strip'>strip (1)</a></li><li><a href='/blog/categories/ubuntu'>ubuntu (1)</a></li><li><a href='/blog/categories/upnp'>upnp (1)</a></li><li><a href='/blog/categories/usb'>usb (1)</a></li><li><a href='/blog/categories/valgrind'>valgrind (2)</a></li><li><a href='/blog/categories/vim'>vim (2)</a></li><li><a href='/blog/categories/virtualbox'>virtualbox (2)</a></li><li><a href='/blog/categories/wireless'>wireless (1)</a></li><li><a href='/blog/categories/wpa-supplicant'>wpa_supplicant (1)</a></li><li><a href='/blog/categories/tai-wan-xiao-chi'>台灣小吃 (1)</a></li><li><a href='/blog/categories/gan-xiang'>感想 (8)</a></li><li><a href='/blog/categories/kuang-rou'>爌肉 (1)</a></li><li><a href='/blog/categories/bi-ji'>筆記 (2)</a></li><li><a href='/blog/categories/zu-zhuang'>組裝 (3)</a></li><li><a href='/blog/categories/lao-jian-zhu'>老建築 (3)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arm'>arm (11)</a></li><li><a href='/blog/categories/asm'>asm (1)</a></li><li><a href='/blog/categories/assembler'>assembler (2)</a></li><li><a href='/blog/categories/assembly'>assembly (3)</a></li><li><a href='/blog/categories/autotools'>autotools (4)</a></li><li><a href='/blog/categories/banana-pi'>banana pi (1)</a></li><li><a href='/blog/categories/bash'>bash (1)</a></li><li><a href='/blog/categories/binutils'>binutils (14)</a></li><li><a href='/blog/categories/buildroot'>buildroot (2)</a></li><li><a href='/blog/categories/c'>c (28)</a></li><li><a href='/blog/categories/c-preprocessor'>c preprocessor (1)</a></li><li><a href='/blog/categories/c99'>c99 (1)</a></li><li><a href='/blog/categories/cmake'>cmake (2)</a></li><li><a href='/blog/categories/dbdoclet'>dbdoclet (1)</a></li><li><a href='/blog/categories/debian'>debian (16)</a></li><li><a href='/blog/categories/debootstrap'>debootstrap (1)</a></li><li><a href='/blog/categories/doxygen'>doxygen (1)</a></li><li><a href='/blog/categories/f9'>f9 (1)</a></li><li><a href='/blog/categories/free-software'>free software (1)</a></li><li><a href='/blog/categories/freertos'>freertos (1)</a></li><li><a href='/blog/categories/fsf'>fsf (1)</a></li><li><a href='/blog/categories/gcc'>gcc (2)</a></li><li><a href='/blog/categories/gdb'>gdb (1)</a></li><li><a href='/blog/categories/getopt'>getopt (1)</a></li><li><a href='/blog/categories/gettext'>gettext (2)</a></li><li><a href='/blog/categories/git'>git (4)</a></li><li><a href='/blog/categories/git-remote'>git remote (2)</a></li><li><a href='/blog/categories/github-flavored-markdown'>github flavored markdown (1)</a></li><li><a href='/blog/categories/github-pages'>github pages (1)</a></li><li><a href='/blog/categories/gnu'>gnu (1)</a></li><li><a href='/blog/categories/gnu-as'>gnu as (1)</a></li><li><a href='/blog/categories/gpl'>gpl (1)</a></li><li><a href='/blog/categories/gstreamer'>gstreamer (1)</a></li><li><a href='/blog/categories/hole'>hole (1)</a></li><li><a href='/blog/categories/inline'>inline (1)</a></li><li><a href='/blog/categories/javadoc'>javadoc (2)</a></li><li><a href='/blog/categories/ld'>ld (1)</a></li><li><a href='/blog/categories/libtool'>libtool (2)</a></li><li><a href='/blog/categories/linker'>linker (1)</a></li><li><a href='/blog/categories/linker-script'>linker script (5)</a></li><li><a href='/blog/categories/linux'>linux (41)</a></li><li><a href='/blog/categories/linux-kernel'>linux kernel (2)</a></li><li><a href='/blog/categories/linux-utilities'>linux utilities (2)</a></li><li><a href='/blog/categories/live-cd'>live cd (1)</a></li><li><a href='/blog/categories/lseek'>lseek (1)</a></li><li><a href='/blog/categories/macro'>macro (1)</a></li><li><a href='/blog/categories/make'>make (6)</a></li><li><a href='/blog/categories/markdown'>markdown (2)</a></li><li><a href='/blog/categories/octopress'>octopress (8)</a></li><li><a href='/blog/categories/osm'>osm (1)</a></li><li><a href='/blog/categories/patch'>patch (1)</a></li><li><a href='/blog/categories/pbuilder'>pbuilder (2)</a></li><li><a href='/blog/categories/pomodoro-technique'>pomodoro technique (1)</a></li><li><a href='/blog/categories/presentation'>presentation (14)</a></li><li><a href='/blog/categories/python'>python (3)</a></li><li><a href='/blog/categories/qemu'>qemu (3)</a></li><li><a href='/blog/categories/quilt'>quilt (1)</a></li><li><a href='/blog/categories/regex'>regex (1)</a></li><li><a href='/blog/categories/rtenv'>rtenv (1)</a></li><li><a href='/blog/categories/rtos'>rtos (1)</a></li><li><a href='/blog/categories/semihosting'>semihosting (1)</a></li><li><a href='/blog/categories/shell-script'>shell script (4)</a></li><li><a href='/blog/categories/software-development'>software development (1)</a></li><li><a href='/blog/categories/stm32'>stm32 (5)</a></li><li><a href='/blog/categories/strip'>strip (1)</a></li><li><a href='/blog/categories/ubuntu'>ubuntu (1)</a></li><li><a href='/blog/categories/upnp'>upnp (1)</a></li><li><a href='/blog/categories/usb'>usb (1)</a></li><li><a href='/blog/categories/valgrind'>valgrind (2)</a></li><li><a href='/blog/categories/vim'>vim (2)</a></li><li><a href='/blog/categories/virtualbox'>virtualbox (2)</a></li><li><a href='/blog/categories/wireless'>wireless (1)</a></li><li><a href='/blog/categories/wpa-supplicant'>wpa_supplicant (1)</a></li><li><a href='/blog/categories/tai-wan-xiao-chi'>台灣小吃 (1)</a></li><li><a href='/blog/categories/gan-xiang'>感想 (8)</a></li><li><a href='/blog/categories/kuang-rou'>爌肉 (1)</a></li><li><a href='/blog/categories/bi-ji'>筆記 (2)</a></li><li><a href='/blog/categories/zu-zhuang'>組裝 (3)</a></li><li><a href='/blog/categories/lao-jian-zhu'>老建築 (3)</a></li></ul>
 </section>
 <section>
   <h1>Category Cloud</h1>
-    <span id="tag-cloud"><a href='/blog/categories/arm' style='font-size: 116.09756097560975%'>arm(11)</a> <a href='/blog/categories/asm' style='font-size: 101.46341463414635%'>asm(1)</a> <a href='/blog/categories/assembler' style='font-size: 102.92682926829268%'>assembler(2)</a> <a href='/blog/categories/assembly' style='font-size: 104.39024390243902%'>assembly(3)</a> <a href='/blog/categories/autotools' style='font-size: 105.85365853658537%'>autotools(4)</a> <a href='/blog/categories/banana-pi' style='font-size: 101.46341463414635%'>banana pi(1)</a> <a href='/blog/categories/bash' style='font-size: 101.46341463414635%'>bash(1)</a> <a href='/blog/categories/binutils' style='font-size: 120.48780487804878%'>binutils(14)</a> <a href='/blog/categories/buildroot' style='font-size: 102.92682926829268%'>buildroot(2)</a> <a href='/blog/categories/c' style='font-size: 140.97560975609755%'>c(28)</a> <a href='/blog/categories/c-preprocessor' style='font-size: 101.46341463414635%'>c preprocessor(1)</a> <a href='/blog/categories/c99' style='font-size: 101.46341463414635%'>c99(1)</a> <a href='/blog/categories/cmake' style='font-size: 102.92682926829268%'>cmake(2)</a> <a href='/blog/categories/dbdoclet' style='font-size: 101.46341463414635%'>dbdoclet(1)</a> <a href='/blog/categories/debian' style='font-size: 123.41463414634146%'>debian(16)</a> <a href='/blog/categories/debootstrap' style='font-size: 101.46341463414635%'>debootstrap(1)</a> <a href='/blog/categories/doxygen' style='font-size: 101.46341463414635%'>doxygen(1)</a> <a href='/blog/categories/f9' style='font-size: 101.46341463414635%'>f9(1)</a> <a href='/blog/categories/free-software' style='font-size: 101.46341463414635%'>free software(1)</a> <a href='/blog/categories/freertos' style='font-size: 101.46341463414635%'>freertos(1)</a> <a href='/blog/categories/fsf' style='font-size: 101.46341463414635%'>fsf(1)</a> <a href='/blog/categories/gcc' style='font-size: 102.92682926829268%'>gcc(2)</a> <a href='/blog/categories/gdb' style='font-size: 101.46341463414635%'>gdb(1)</a> <a href='/blog/categories/getopt' style='font-size: 101.46341463414635%'>getopt(1)</a> <a href='/blog/categories/gettext' style='font-size: 102.92682926829268%'>gettext(2)</a> <a href='/blog/categories/git' style='font-size: 107.3170731707317%'>git(5)</a> <a href='/blog/categories/github-flavored-markdown' style='font-size: 101.46341463414635%'>github flavored markdown(1)</a> <a href='/blog/categories/github-pages' style='font-size: 101.46341463414635%'>github pages(1)</a> <a href='/blog/categories/gnu' style='font-size: 101.46341463414635%'>gnu(1)</a> <a href='/blog/categories/gnu-as' style='font-size: 101.46341463414635%'>gnu as(1)</a> <a href='/blog/categories/got' style='font-size: 101.46341463414635%'>got(1)</a> <a href='/blog/categories/gpl' style='font-size: 101.46341463414635%'>gpl(1)</a> <a href='/blog/categories/gstreamer' style='font-size: 101.46341463414635%'>gstreamer(1)</a> <a href='/blog/categories/hole' style='font-size: 101.46341463414635%'>hole(1)</a> <a href='/blog/categories/inline' style='font-size: 101.46341463414635%'>inline(1)</a> <a href='/blog/categories/javadoc' style='font-size: 102.92682926829268%'>javadoc(2)</a> <a href='/blog/categories/ld' style='font-size: 101.46341463414635%'>ld(1)</a> <a href='/blog/categories/libtool' style='font-size: 102.92682926829268%'>libtool(2)</a> <a href='/blog/categories/linker' style='font-size: 101.46341463414635%'>linker(1)</a> <a href='/blog/categories/linker-script' style='font-size: 107.3170731707317%'>linker script(5)</a> <a href='/blog/categories/linux' style='font-size: 160.0%'>linux(41)</a> <a href='/blog/categories/linux-kernel' style='font-size: 102.92682926829268%'>linux kernel(2)</a> <a href='/blog/categories/linux-utilities' style='font-size: 102.92682926829268%'>linux utilities(2)</a> <a href='/blog/categories/live-cd' style='font-size: 101.46341463414635%'>live cd(1)</a> <a href='/blog/categories/lseek' style='font-size: 101.46341463414635%'>lseek(1)</a> <a href='/blog/categories/macro' style='font-size: 101.46341463414635%'>macro(1)</a> <a href='/blog/categories/make' style='font-size: 108.78048780487805%'>make(6)</a> <a href='/blog/categories/markdown' style='font-size: 102.92682926829268%'>markdown(2)</a> <a href='/blog/categories/octopress' style='font-size: 111.70731707317073%'>octopress(8)</a> <a href='/blog/categories/osm' style='font-size: 101.46341463414635%'>osm(1)</a> <a href='/blog/categories/patch' style='font-size: 101.46341463414635%'>patch(1)</a> <a href='/blog/categories/pbuilder' style='font-size: 102.92682926829268%'>pbuilder(2)</a> <a href='/blog/categories/pomodoro-technique' style='font-size: 101.46341463414635%'>pomodoro technique(1)</a> <a href='/blog/categories/presentation' style='font-size: 120.48780487804878%'>presentation(14)</a> <a href='/blog/categories/python' style='font-size: 104.39024390243902%'>python(3)</a> <a href='/blog/categories/qemu' style='font-size: 104.39024390243902%'>qemu(3)</a> <a href='/blog/categories/quilt' style='font-size: 101.46341463414635%'>quilt(1)</a> <a href='/blog/categories/regex' style='font-size: 101.46341463414635%'>regex(1)</a> <a href='/blog/categories/rtenv' style='font-size: 101.46341463414635%'>rtenv(1)</a> <a href='/blog/categories/rtos' style='font-size: 101.46341463414635%'>rtos(1)</a> <a href='/blog/categories/semihosting' style='font-size: 101.46341463414635%'>semihosting(1)</a> <a href='/blog/categories/shell-script' style='font-size: 105.85365853658537%'>shell script(4)</a> <a href='/blog/categories/software-development' style='font-size: 101.46341463414635%'>software development(1)</a> <a href='/blog/categories/stm32' style='font-size: 107.3170731707317%'>stm32(5)</a> <a href='/blog/categories/strip' style='font-size: 101.46341463414635%'>strip(1)</a> <a href='/blog/categories/ubuntu' style='font-size: 101.46341463414635%'>ubuntu(1)</a> <a href='/blog/categories/upnp' style='font-size: 101.46341463414635%'>upnp(1)</a> <a href='/blog/categories/usb' style='font-size: 101.46341463414635%'>usb(1)</a> <a href='/blog/categories/valgrind' style='font-size: 102.92682926829268%'>valgrind(2)</a> <a href='/blog/categories/vim' style='font-size: 102.92682926829268%'>vim(2)</a> <a href='/blog/categories/virtualbox' style='font-size: 102.92682926829268%'>virtualbox(2)</a> <a href='/blog/categories/wireless' style='font-size: 101.46341463414635%'>wireless(1)</a> <a href='/blog/categories/wpa-supplicant' style='font-size: 101.46341463414635%'>wpa_supplicant(1)</a> <a href='/blog/categories/tai-wan-xiao-chi' style='font-size: 101.46341463414635%'>台灣小吃(1)</a> <a href='/blog/categories/gan-xiang' style='font-size: 111.70731707317073%'>感想(8)</a> <a href='/blog/categories/kuang-rou' style='font-size: 101.46341463414635%'>爌肉(1)</a> <a href='/blog/categories/bi-ji' style='font-size: 102.92682926829268%'>筆記(2)</a> <a href='/blog/categories/zu-zhuang' style='font-size: 104.39024390243902%'>組裝(3)</a> <a href='/blog/categories/lao-jian-zhu' style='font-size: 104.39024390243902%'>老建築(3)</a> </span>
+    <span id="tag-cloud"><a href='/blog/categories/arm' style='font-size: 116.09756097560975%'>arm(11)</a> <a href='/blog/categories/asm' style='font-size: 101.46341463414635%'>asm(1)</a> <a href='/blog/categories/assembler' style='font-size: 102.92682926829268%'>assembler(2)</a> <a href='/blog/categories/assembly' style='font-size: 104.39024390243902%'>assembly(3)</a> <a href='/blog/categories/autotools' style='font-size: 105.85365853658537%'>autotools(4)</a> <a href='/blog/categories/banana-pi' style='font-size: 101.46341463414635%'>banana pi(1)</a> <a href='/blog/categories/bash' style='font-size: 101.46341463414635%'>bash(1)</a> <a href='/blog/categories/binutils' style='font-size: 120.48780487804878%'>binutils(14)</a> <a href='/blog/categories/buildroot' style='font-size: 102.92682926829268%'>buildroot(2)</a> <a href='/blog/categories/c' style='font-size: 140.97560975609755%'>c(28)</a> <a href='/blog/categories/c-preprocessor' style='font-size: 101.46341463414635%'>c preprocessor(1)</a> <a href='/blog/categories/c99' style='font-size: 101.46341463414635%'>c99(1)</a> <a href='/blog/categories/cmake' style='font-size: 102.92682926829268%'>cmake(2)</a> <a href='/blog/categories/dbdoclet' style='font-size: 101.46341463414635%'>dbdoclet(1)</a> <a href='/blog/categories/debian' style='font-size: 123.41463414634146%'>debian(16)</a> <a href='/blog/categories/debootstrap' style='font-size: 101.46341463414635%'>debootstrap(1)</a> <a href='/blog/categories/doxygen' style='font-size: 101.46341463414635%'>doxygen(1)</a> <a href='/blog/categories/f9' style='font-size: 101.46341463414635%'>f9(1)</a> <a href='/blog/categories/free-software' style='font-size: 101.46341463414635%'>free software(1)</a> <a href='/blog/categories/freertos' style='font-size: 101.46341463414635%'>freertos(1)</a> <a href='/blog/categories/fsf' style='font-size: 101.46341463414635%'>fsf(1)</a> <a href='/blog/categories/gcc' style='font-size: 102.92682926829268%'>gcc(2)</a> <a href='/blog/categories/gdb' style='font-size: 101.46341463414635%'>gdb(1)</a> <a href='/blog/categories/getopt' style='font-size: 101.46341463414635%'>getopt(1)</a> <a href='/blog/categories/gettext' style='font-size: 102.92682926829268%'>gettext(2)</a> <a href='/blog/categories/git' style='font-size: 105.85365853658537%'>git(4)</a> <a href='/blog/categories/git-remote' style='font-size: 102.92682926829268%'>git remote(2)</a> <a href='/blog/categories/github-flavored-markdown' style='font-size: 101.46341463414635%'>github flavored markdown(1)</a> <a href='/blog/categories/github-pages' style='font-size: 101.46341463414635%'>github pages(1)</a> <a href='/blog/categories/gnu' style='font-size: 101.46341463414635%'>gnu(1)</a> <a href='/blog/categories/gnu-as' style='font-size: 101.46341463414635%'>gnu as(1)</a> <a href='/blog/categories/gpl' style='font-size: 101.46341463414635%'>gpl(1)</a> <a href='/blog/categories/gstreamer' style='font-size: 101.46341463414635%'>gstreamer(1)</a> <a href='/blog/categories/hole' style='font-size: 101.46341463414635%'>hole(1)</a> <a href='/blog/categories/inline' style='font-size: 101.46341463414635%'>inline(1)</a> <a href='/blog/categories/javadoc' style='font-size: 102.92682926829268%'>javadoc(2)</a> <a href='/blog/categories/ld' style='font-size: 101.46341463414635%'>ld(1)</a> <a href='/blog/categories/libtool' style='font-size: 102.92682926829268%'>libtool(2)</a> <a href='/blog/categories/linker' style='font-size: 101.46341463414635%'>linker(1)</a> <a href='/blog/categories/linker-script' style='font-size: 107.3170731707317%'>linker script(5)</a> <a href='/blog/categories/linux' style='font-size: 160.0%'>linux(41)</a> <a href='/blog/categories/linux-kernel' style='font-size: 102.92682926829268%'>linux kernel(2)</a> <a href='/blog/categories/linux-utilities' style='font-size: 102.92682926829268%'>linux utilities(2)</a> <a href='/blog/categories/live-cd' style='font-size: 101.46341463414635%'>live cd(1)</a> <a href='/blog/categories/lseek' style='font-size: 101.46341463414635%'>lseek(1)</a> <a href='/blog/categories/macro' style='font-size: 101.46341463414635%'>macro(1)</a> <a href='/blog/categories/make' style='font-size: 108.78048780487805%'>make(6)</a> <a href='/blog/categories/markdown' style='font-size: 102.92682926829268%'>markdown(2)</a> <a href='/blog/categories/octopress' style='font-size: 111.70731707317073%'>octopress(8)</a> <a href='/blog/categories/osm' style='font-size: 101.46341463414635%'>osm(1)</a> <a href='/blog/categories/patch' style='font-size: 101.46341463414635%'>patch(1)</a> <a href='/blog/categories/pbuilder' style='font-size: 102.92682926829268%'>pbuilder(2)</a> <a href='/blog/categories/pomodoro-technique' style='font-size: 101.46341463414635%'>pomodoro technique(1)</a> <a href='/blog/categories/presentation' style='font-size: 120.48780487804878%'>presentation(14)</a> <a href='/blog/categories/python' style='font-size: 104.39024390243902%'>python(3)</a> <a href='/blog/categories/qemu' style='font-size: 104.39024390243902%'>qemu(3)</a> <a href='/blog/categories/quilt' style='font-size: 101.46341463414635%'>quilt(1)</a> <a href='/blog/categories/regex' style='font-size: 101.46341463414635%'>regex(1)</a> <a href='/blog/categories/rtenv' style='font-size: 101.46341463414635%'>rtenv(1)</a> <a href='/blog/categories/rtos' style='font-size: 101.46341463414635%'>rtos(1)</a> <a href='/blog/categories/semihosting' style='font-size: 101.46341463414635%'>semihosting(1)</a> <a href='/blog/categories/shell-script' style='font-size: 105.85365853658537%'>shell script(4)</a> <a href='/blog/categories/software-development' style='font-size: 101.46341463414635%'>software development(1)</a> <a href='/blog/categories/stm32' style='font-size: 107.3170731707317%'>stm32(5)</a> <a href='/blog/categories/strip' style='font-size: 101.46341463414635%'>strip(1)</a> <a href='/blog/categories/ubuntu' style='font-size: 101.46341463414635%'>ubuntu(1)</a> <a href='/blog/categories/upnp' style='font-size: 101.46341463414635%'>upnp(1)</a> <a href='/blog/categories/usb' style='font-size: 101.46341463414635%'>usb(1)</a> <a href='/blog/categories/valgrind' style='font-size: 102.92682926829268%'>valgrind(2)</a> <a href='/blog/categories/vim' style='font-size: 102.92682926829268%'>vim(2)</a> <a href='/blog/categories/virtualbox' style='font-size: 102.92682926829268%'>virtualbox(2)</a> <a href='/blog/categories/wireless' style='font-size: 101.46341463414635%'>wireless(1)</a> <a href='/blog/categories/wpa-supplicant' style='font-size: 101.46341463414635%'>wpa_supplicant(1)</a> <a href='/blog/categories/tai-wan-xiao-chi' style='font-size: 101.46341463414635%'>台灣小吃(1)</a> <a href='/blog/categories/gan-xiang' style='font-size: 111.70731707317073%'>感想(8)</a> <a href='/blog/categories/kuang-rou' style='font-size: 101.46341463414635%'>爌肉(1)</a> <a href='/blog/categories/bi-ji' style='font-size: 102.92682926829268%'>筆記(2)</a> <a href='/blog/categories/zu-zhuang' style='font-size: 104.39024390243902%'>組裝(3)</a> <a href='/blog/categories/lao-jian-zhu' style='font-size: 104.39024390243902%'>老建築(3)</a> </span>
 </section>
 
 

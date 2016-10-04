@@ -45,10 +45,6 @@
     <lastmod>2016-01-24T20:30:32+08:00</lastmod>
   </url>
   <url>
-    <loc>http://wen00072.github.io/blog/2016/01/24/talk-about-git-remote/</loc>
-    <lastmod>2016-01-24T20:30:32+08:00</lastmod>
-  </url>
-  <url>
     <loc>http://wen00072.github.io/blog/2015/12/10/about-inline-asm/</loc>
     <lastmod>2015-12-10T22:16:49+08:00</lastmod>
   </url>
@@ -728,6 +724,9 @@
     <loc>http://wen00072.github.io/blog/categories/virtualbox/</loc>
   </url>
   <url>
+    <loc>http://wen00072.github.io/blog/categories/git-remote/</loc>
+  </url>
+  <url>
     <loc>http://wen00072.github.io/blog/categories/free-software/</loc>
   </url>
   <url>
@@ -786,9 +785,6 @@
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/asm/</loc>
-  </url>
-  <url>
-    <loc>http://wen00072.github.io/blog/categories/got/</loc>
   </url>
   <url>
     <loc>http://wen00072.github.io/blog/categories/stm32/</loc>
